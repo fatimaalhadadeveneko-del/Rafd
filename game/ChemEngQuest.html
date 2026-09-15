@@ -5967,16 +5967,43 @@ const S_hea = {
    ============================================================ */
 
 /* ---------- break room furniture ---------- */
-function couch(x, y, s){
+/* A four-seater, wide enough that nobody sits in anybody's lap.  It is
+   drawn in two passes — the back, then the people, then the seat over
+   their thighs — so everyone reads as sitting rather than standing in
+   front of the furniture. */
+const COUCH_W = 236;                       // half-width of the seat
+function couchBack(x, y, s){
   g.save(); g.translate(x,y); g.scale(s,s);
-  g.fillStyle='rgba(0,0,0,.25)'; g.beginPath(); g.ellipse(0,2,120,12,0,0,7); g.fill();
-  g.fillStyle='#4a5f72'; rr(-118,-96,236,74,14); g.fill();          // back
-  g.fillStyle='#5a7186'; rr(-118,-40,236,42,10); g.fill();          // seat
-  g.fillStyle='#3d5164'; rr(-126,-58,24,58,8); g.fill();            // arms
-  g.fillStyle='#3d5164'; rr(102,-58,24,58,8); g.fill();
-  g.strokeStyle='rgba(0,0,0,.18)'; g.lineWidth=2;
-  g.beginPath(); g.moveTo(-40,-96); g.lineTo(-40,-24); g.moveTo(40,-96); g.lineTo(40,-24); g.stroke();
-  g.fillStyle='#2f4050'; rr(-104,0,16,14,3); g.fill(); rr(88,0,16,14,3); g.fill();
+  g.fillStyle='rgba(0,0,0,.25)';
+  g.beginPath(); g.ellipse(0,4,COUCH_W+18,14,0,0,7); g.fill();
+  g.fillStyle='#4a5f72'; rr(-COUCH_W,-104,COUCH_W*2,84,14); g.fill();
+  g.fillStyle='#415464'; rr(-COUCH_W,-104,COUCH_W*2,11,6); g.fill();
+  g.strokeStyle='rgba(0,0,0,.20)'; g.lineWidth=2;
+  for (let i=1;i<4;i++){
+    const sx = -COUCH_W + i*(COUCH_W*2/4);
+    g.beginPath(); g.moveTo(sx,-104); g.lineTo(sx,-22); g.stroke();
+  }
+  g.restore();
+}
+function couchFront(x, y, s){
+  g.save(); g.translate(x,y); g.scale(s,s);
+  // the seat slab, drawn over everyone's thighs
+  g.fillStyle='#5a7186'; rr(-COUCH_W,-46,COUCH_W*2,50,10); g.fill();
+  g.fillStyle='#65798f'; rr(-COUCH_W,-46,COUCH_W*2,9,6); g.fill();
+  g.fillStyle='rgba(0,0,0,.14)'; rr(-COUCH_W,-2,COUCH_W*2,6,3); g.fill();
+  g.strokeStyle='rgba(0,0,0,.20)'; g.lineWidth=2;
+  for (let i=1;i<4;i++){
+    const sx = -COUCH_W + i*(COUCH_W*2/4);
+    g.beginPath(); g.moveTo(sx,-46); g.lineTo(sx,2); g.stroke();
+  }
+  // arms
+  g.fillStyle='#3d5164'; rr(-COUCH_W-18,-70,28,74,9); g.fill();
+  g.fillStyle='#46596b'; rr(-COUCH_W-18,-70,28,10,6); g.fill();
+  g.fillStyle='#3d5164'; rr( COUCH_W-10,-70,28,74,9); g.fill();
+  g.fillStyle='#46596b'; rr( COUCH_W-10,-70,28,10,6); g.fill();
+  // feet
+  g.fillStyle='#2f4050';
+  rr(-COUCH_W+12,4,16,14,3); g.fill(); rr(COUCH_W-28,4,16,14,3); g.fill();
   g.restore();
 }
 function vending(x, y, s){
@@ -6007,6 +6034,11 @@ function waterCooler(x,y,s){
   g.restore();
 }
 
+/* where the couch is, and where each person sits on it */
+const COUCH_X = 880;
+const SEAT = [COUCH_X - 174, COUCH_X - 58, COUCH_X + 58, COUCH_X + 174];
+const SEAT_Y = 640;   // feet on the floor in front, thighs behind the seat
+
 /* ============================================================
    S_brk — before and after the dream
    ============================================================ */
@@ -6015,7 +6047,7 @@ const S_brk = {
     Hint.begin('brk');
     this.after = !!G.dreamt;
     Music.play(this.after ? 'lab' : 'lab');
-    this.px = this.after ? 640 : 60;
+    this.px = this.after ? SEAT[2] : 60;
     this.py = 618; this.face='right'; this.walkT=0; this.stepT=0;
     this.mode = this.after ? 'wake' : 'walkin';
     this.convo = null; this.reply = null; this.zT = 0; this.sitK = 0;
@@ -6025,11 +6057,11 @@ const S_brk = {
       after(60, ()=>{
         this.convo = Convo([
           { by:NPCS.colleague.name, text:'Hey. Hey! Are you alright? You shouted.',
-            at:()=>[880, 372], w:320 },
+            at:()=>[SEAT[1], 372], w:320 },
           { by:hero.name, text:'Yes. Yes. Thank God that was only a dream.',
             at:()=>[this.px, 372], w:320 },
           { by:NPCS.colleague.name, text:'Break is over anyway. Mr. Tarek is asking for you.',
-            at:()=>[880, 372], w:320 }
+            at:()=>[SEAT[1], 372], w:320 }
         ], ()=>{ this.convo=null; this.mode='leave';
                  toast('Walk out to the right. Mr. Tarek is waiting.'); });
       });
@@ -6084,46 +6116,55 @@ const S_brk = {
     for (let i=0;i<2;i++){ g.fillStyle='#e8eef2'; rr(424+i*46, 534, 22, 22, 4); g.fill();
       if (Math.random()<.08) emitSteam(435+i*46, 532, 1, {speed:.4, col:'rgba(210,190,170,.4)'}); }
 
-    couch(880, 604, 1.0);
+    couchBack(COUCH_X, 604, 1.0);
 
     /* ---------------- the other colleagues, who do not talk ---------------- */
     const stu = { skin:'#c99a6e', hair:'#2a1c14', hairStyle:'neat',
                   suit:'#6a7a88', suit2:'#4c5a66', trim:'#c0ccd6', accent:'#88a0b0' };
     const stu2 = { skin:'#e0b48c', hair:'#3a2a1a', hairStyle:'cap',
                    suit:'#7a6a90', suit2:'#5a4d6c', trim:'#d8cfe8', accent:'#f0c05a' };
-    drawPerson(stu,  790, 604, 1.75, { dir:'right', face:'neutral', seed:11 });
-    drawPerson(stu2, 985, 604, 1.75, { dir:'left',  face:'happy',   seed:17 });
+    drawPerson(stu,  SEAT[0], SEAT_Y, 1.7, { dir:'right', face:'neutral', seed:11,
+                                             pose:'slump', shadow:false });
+    drawPerson(stu2, SEAT[3], SEAT_Y, 1.7, { dir:'left',  face:'happy',   seed:17,
+                                             pose:'slump', shadow:false });
 
     /* ---------------- Dina ---------------- */
-    const dinaX = 880;
+    const dinaX = SEAT[1];
     const dinaTalk = this.convo && this.convo.speaking(NPCS.colleague.name);
-    drawPerson(NPCS.colleague, dinaX, 566, 1.85, {
+    drawPerson(NPCS.colleague, dinaX, SEAT_Y, 1.72, { shadow:false,
       dir: this.px < dinaX ? 'left' : 'right',
       face: this.mode==='wake' ? 'shock' : 'happy',
       talk: dinaTalk, seed:9,
       pose: dinaTalk ? 'talk' : 'idle'
     });
-    txt(NPCS.colleague.name, dinaX, 596, 13, 'rgba(234,244,250,.5)');
+    txt(NPCS.colleague.name, dinaX, SEAT_Y + 22, 13, 'rgba(234,244,250,.5)');
 
     drawParts();
 
     /* ---------------- the player ---------------- */
     let hopt = { dir:this.face, walk:this.walkT, seed:5,
                  ppe:{ hat:false, goggles:false, coat:G.ppe.coat } };
+    /* once seated, the engineer sits on the couch like everyone else */
+    const seated = (this.mode === 'sleep' || this.mode === 'wake');
+    let hx = this.px, hy = this.py, hs = 1.95;
+    if (seated){ hx = SEAT[2]; hy = SEAT_Y; hs = 1.72; }
     if (this.mode === 'sleep'){
       hopt = Object.assign(hopt, { dir:'right', walk:0, face:'sleep',
-        lift:-38, headTilt:0.42, pose:'slump', squash:0.96 });
+        headTilt:0.42, pose:'slump', shadow:false });
       this.zT += dt;
-      if (this.zT > 34){ this.zT = 0; emitZ(this.px+26, this.py-168); }
+      if (this.zT > 34){ this.zT = 0; emitZ(hx+26, hy-190); }
     } else if (this.mode === 'wake'){
       hopt = Object.assign(hopt, { dir:'right', walk:0,
-        face: this.gaspT>0 ? 'panic' : 'worry', lift:-38,
-        sweat: this.gaspT>0 ? 3 : 1, pose:'panic' });
+        face: this.gaspT>0 ? 'panic' : 'worry',
+        sweat: this.gaspT>0 ? 3 : 1, pose:'panic', shadow:false });
       if (this.gaspT>0) this.gaspT -= dt;
     } else if (this.mode === 'chat'){
       hopt.face = 'happy';
     }
-    drawPerson(hero, this.px, this.py, 1.95, hopt);
+    drawPerson(hero, hx, hy, hs, hopt);
+
+    /* the seat cushion goes over everybody's thighs */
+    couchFront(COUCH_X, 604, 1.0);
 
     /* ---------------- flow ---------------- */
     if (this.mode === 'walkin'){
@@ -6151,7 +6192,7 @@ const S_brk = {
       }
     }
     else if (this.mode === 'tocouch'){
-      const tx = 880;
+      const tx = SEAT[2];
       if (Math.abs(this.px - tx) > 4){
         this.px += Math.sign(tx - this.px) * 2.6 * dt;
         this.face = tx > this.px ? 'right' : 'left';
@@ -6199,7 +6240,7 @@ const S_brk = {
     if (this.convo) this.convo.draw();
 
     if (this.mode === 'sleep'){
-      txt('...', this.px+40, this.py-200, 26, 'rgba(200,220,245,.6)');
+      txt('...', SEAT[2]+42, SEAT_Y-216, 26, 'rgba(200,220,245,.6)');
     }
 
     vignette(.4);
@@ -6212,7 +6253,7 @@ const S_brk = {
     this.mode='chat';
     this.convo = Convo([
       { by:NPCS.colleague.name, text:'You survived the morning. How is it going out there?',
-        at:()=>[880, 372], w:330 }
+        at:()=>[SEAT[1], 372], w:330 }
     ], ()=>{ this.convo=null; this.reply='pick'; });
   },
 
@@ -6226,9 +6267,9 @@ const S_brk = {
       : 'That is the most dangerous sentence in this building. Sit. Rest.';
     this.convo = Convo([
       { by:hero.name, text:mine, at:()=>[this.px, 372], w:330 },
-      { by:NPCS.colleague.name, text:hers, at:()=>[880, 372], w:330 },
+      { by:NPCS.colleague.name, text:hers, at:()=>[SEAT[1], 372], w:330 },
       { by:NPCS.colleague.name, text:'Take the couch. You have earned it.',
-        at:()=>[880, 372], w:300 }
+        at:()=>[SEAT[1], 372], w:300 }
     ], ()=>{ this.convo=null; this.mode='tocouch'; });
   }
 };
