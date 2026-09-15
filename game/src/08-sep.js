@@ -746,7 +746,7 @@ const S_sep = {
 
     if (this.phase === 'build'){
       this.pk += dt;
-      if (this.pk === dt) SFX.place();
+      if (!this.placedSfx){ this.placedSfx = true; SFX.place(); }
       if (this.pk > 70){ this.phase='run'; this.pk=0;
         if (this.ok) SFX.good(); else { SFX.bad(); if (this.fail==='burnt') SFX.fire();
           if (this.fail==='flood'||this.fail==='sludge') SFX.pour();
@@ -798,7 +798,7 @@ const S_sep = {
     this.choice = id;
     this.ok = (id === b.right);
     this.fail = this.ok ? null : (b.wrong[id] ? b.wrong[id].fail : 'blow');
-    this.phase = 'build'; this.pk = 0;
+    this.phase = 'build'; this.pk = 0; this.placedSfx = false;
     if (!this.ok) G.blunders++;
   }
 };
