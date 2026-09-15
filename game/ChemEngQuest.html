@@ -5575,6 +5575,7 @@ const S_hea = {
     this.pathLive = -1;
     this.trim = 0.2; this.trimDone = false;
     this.pts = 0; this.safePts = 0; this.scored = false;
+    this.quiz = null; this.quizScore = 0;
     this.note = null; this.noteT = 0;
     this.mutter = mutterFor('hea'); this.mutterT = 210;
     after(60, ()=>{ this.mode='free'; });
@@ -5582,12 +5583,19 @@ const S_hea = {
   exit(){
     if (!this.scored){ this.scored = true;
       award('hea', this.pts, 7); award('saf', this.safePts, 1);
+      if (isHard()) award('hea', this.quizScore || 0, 3);
       if (this.trimDone) G.done.hea = true; }
   },
   say(t, f=240){ this.note=t; this.noteT=f; },
   bothFixed(){ return this.st.every(s=>s.device && s.ok); },
 
   draw(){
+    if (this.mode === 'quiz' && this.quiz){
+      const bg0 = g.createLinearGradient(0,0,0,H);
+      bg0.addColorStop(0,'#241610'); bg0.addColorStop(1,'#0f0908');
+      g.fillStyle=bg0; g.fillRect(0,0,W,H);
+      this.quiz.draw(); return;
+    }
     if (this.mode === 'path')  { this.drawPath();  return; }
     if (this.mode === 'trim')  { this.drawTrim();  return; }
 
@@ -5727,11 +5735,17 @@ const S_hea = {
         const cw=340, gap=40, x0=(W-(2*cw+gap))/2;
         const x=x0+i*(cw+gap), y=200, h=300;
         const z = zone(x,y,cw,h);
+        /* instinct: a heat specialist already knows, a weak one guesses badly */
+        const ghostGood = ghostHelp('hea') && o.id === p.need;
+        const ghostBad  = isWeak('hea')   && o.id !== p.need;
         g.save(); if (z.hover){ g.shadowColor='#ff7a3a'; g.shadowBlur=24; }
         g.fillStyle = z.hover ? 'rgba(60,28,16,.98)' : 'rgba(26,14,10,.96)';
         rr(x, z.hover?y-5:y, cw, h, 12); g.fill(); g.restore();
-        g.strokeStyle = z.hover ? '#ff7a3a' : 'rgba(255,122,58,.32)';
-        g.lineWidth=2; rr(x, z.hover?y-5:y, cw, h, 12); g.stroke();
+        g.strokeStyle = ghostGood ? `rgba(63,208,127,${.5+Math.sin(T/10)*.35})`
+                      : ghostBad  ? `rgba(238,95,110,${.42+Math.sin(T/10)*.28})`
+                      : z.hover ? '#ff7a3a' : 'rgba(255,122,58,.32)';
+        g.lineWidth = (ghostGood||ghostBad) ? 3.4 : 2;
+        rr(x, z.hover?y-5:y, cw, h, 12); g.stroke();
         const yy = z.hover?y-5:y;
         g.save(); g.translate(x+cw/2, yy+220); g.scale(1.5,1.5);
         o.draw(0,0,1,{run:z.hover}); g.restore();
@@ -5739,7 +5753,28 @@ const S_hea = {
         txt(o.sub,  x+cw/2, yy+272, 14, 'rgba(232,216,204,.6)','center',400);
         if (z.clicked) this.fit(o.id);
       });
-      if (button('NOT YET', W/2-90, H-72, 180, 44, {size:16})) this.mode='free';
+      /* what the engineer thinks, which is not always worth hearing */
+      const hunch = isStrong('hea')
+        ? (p.need === 'cool'
+            ? 'That is a runaway. Take the heat out before it takes the lagging off.'
+            : 'It is losing more heat than it makes. Put heat back in.')
+        : isWeak('hea')
+          ? (p.need === 'cool'
+              ? 'It is hot, so it clearly likes being hot. Help it along.'
+              : 'It is cold. Cold things are safe things. Make it colder.')
+          : null;
+      if (hunch){
+        panel(W/2-380, H-150, 760, 64,
+              isStrong('hea') ? 'rgba(8,36,26,.95)' : 'rgba(44,14,18,.95)',
+              isStrong('hea') ? 'rgba(63,208,127,.55)' : 'rgba(238,95,110,.55)');
+        const nw = 14 + hero.name.length*8.4;
+        g.fillStyle = isStrong('hea') ? 'rgba(63,208,127,.92)' : 'rgba(238,95,110,.92)';
+        rr(W/2-362, H-162, nw, 22, 7); g.fill();
+        txt(hero.name, W/2-362+nw/2, H-151, 14, '#04121a');
+        wrapText(hunch, W/2, H-118, 700, 22, 18,
+                 isStrong('hea') ? '#d8f0e2' : '#f0b8be', 'center', 400);
+      }
+      if (button('NOT YET', W/2-90, H-56, 180, 40, {size:16})) this.mode='free';
     }
 
     if (this.noteT > 0){
@@ -5886,26 +5921,40 @@ const S_hea = {
     g.fillStyle='rgba(255,255,255,.1)'; rr(W/2-200, 614, 400, 18, 9); g.fill();
     g.fillStyle = good ? '#3fd07f' : '#5aa8e0';
     rr(W/2-200, 614, 400*clamp(this.trim,0,1), 18, 9); g.fill();
-    g.strokeStyle='rgba(63,208,127,.7)'; g.lineWidth=2;
-    g.strokeRect(W/2-200+400*0.565, 611, 400*0.095, 24);
+    if (showGuide('hea')){
+      g.strokeStyle='rgba(63,208,127,.7)'; g.lineWidth=2;
+      g.strokeRect(W/2-200+400*0.565, 611, 400*0.095, 24);
+    }
     if (button('–', W/2-262, 608, 46, 32, {size:22})) this.trim = clamp(this.trim-0.03,0,1);
     if (button('+', W/2+216, 608, 46, 32, {size:22})) this.trim = clamp(this.trim+0.03,0,1);
     if (keys.ArrowRight) this.trim = clamp(this.trim + 0.006*dt, 0, 1);
     if (keys.ArrowLeft)  this.trim = clamp(this.trim - 0.006*dt, 0, 1);
 
-    txt(good ? 'that is steady state. Hold it.'
-       : shown > 92 ? 'still too hot. More cooling.'
-       : 'you have overcooled it. Ease off.',
+    txt(showGuide('hea')
+        ? (good ? 'that is steady state. Hold it.'
+                 : shown > 92 ? 'still too hot. More cooling.'
+                 : 'you have overcooled it. Ease off.')
+        : (good ? 'the needle has stopped moving. Hold it there.'
+                 : 'watch the gauge. Steady means it stops drifting, not that it reads zero.'),
        W/2, 660, 20, good ? '#8fe8b8' : '#f5cf8a','center',400);
 
     if (good) this.holdT = (this.holdT||0) + dt; else this.holdT = 0;
     g.fillStyle='rgba(63,208,127,.25)';
-    g.fillRect(W/2-120, 678, 240*clamp((this.holdT||0)/90,0,1), 6);
+    g.fillRect(W/2-120, 678, 240*clamp((this.holdT||0)/(isHard()?140:90),0,1), 6);
 
-    if ((this.holdT||0) > 90 && !this.trimDone){
+    if ((this.holdT||0) > (isHard() ? 140 : 90) && !this.trimDone){
       this.trimDone = true; this.pts += 1; SFX.great();
       toast('Steady. Both skids are yours.');
-      after(70, ()=>{ G.done.hea = true; go(S_hub, 'fade'); });
+      after(70, ()=>{
+        G.done.hea = true;
+        if (isHard() && !G.quizDone.hea){
+          this.quiz = makeTFQuiz('hea', (correct)=>{
+            G.quizDone.hea = true; this.quizScore = correct; this.quiz = null;
+            go(S_hub, 'fade');
+          });
+          this.mode = 'quiz';
+        } else go(S_hub, 'fade');
+      });
     }
     hudEl.textContent = 'Thermal Exchange Hall   ·   trimming to steady state';
   }
