@@ -346,7 +346,7 @@ const S_sep = {
     this.ppeMsg = null; this.ppeMsgT = 0; this.ppeAnim = 0;
     this.convo = null; this.reactT = 0;
     this.scored = false;
-    this.mutter = MUTTER.sep[skill('sep')]; this.mutterT = 210;
+    this.mutter = mutterFor('sep'); this.mutterT = 210;
     after(60, ()=>{ this.mode = 'free'; });
   },
   exit(){
@@ -580,17 +580,19 @@ const S_sep = {
 
     /* ================= the engineer ================= */
     const talking = this.convo && !this.convo.done;
-    let face = 'neutral', sweat = 0, armF, tilt = 0, lift = 0;
+    let face = 'neutral', sweat = 0, pose, tilt = 0, lift = 0;
     if (this.mode==='bay' && this.phase==='react'){
-      if (this.ok){ face = 'proud'; armF = -2.2 + Math.sin(T/7)*0.25; }
-      else { face = 'shock'; sweat = 2; armF = -1.0; }
+      if (this.ok){ face = 'proud'; pose = 'cheer'; }
+      else { face = 'shock'; sweat = 2; pose = 'panic'; }
       lift = this.ok ? -Math.abs(Math.sin(T/9))*9 : 0;
       tilt = this.ok ? 0 : Math.sin(T/6)*0.05;
     } else if (this.mode==='bay' && this.phase==='build'){
-      face = 'happy'; armF = -1.5 + Math.sin(T/5)*0.6;
-    } else if (this.ppeAnim > 0){ face = 'happy'; armF = -2.4; }
+      face = 'happy'; pose = 'work';
+    } else if (this.mode==='bay' && this.phase==='inspect'){
+      face = 'neutral'; pose = 'think';
+    } else if (this.ppeAnim > 0){ face = 'happy'; pose = 'wave'; }
     drawPerson(hero, this.px, this.py, 2.0, {
-      dir:this.face, walk:this.walkT, face, sweat, armF, tilt, lift, seed:5,
+      dir:this.face, walk:this.walkT, face, sweat, pose, tilt, lift, seed:5,
       talk: talking, ppe:{ hat:true, goggles:G.ppe.goggles, coat:G.ppe.coat }
     });
     if (this.ppeAnim > 0){

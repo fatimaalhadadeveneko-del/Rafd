@@ -28,13 +28,15 @@ const CHARS = [
     wrongLine:'"Entropy is basically how fast the pump is spinning."',
     rightLine:'"If it is moving, I can tell you exactly how and why."' },
 
-  { id:'sami', name:'Sami Rahim', title:'The Generalist',
-    skin:'#d9a878', hair:'#3a2418', hairStyle:'neat',
-    suit:'#7b6ee0', suit2:'#5b4fb8', trim:'#d8d2ff', accent:'#a0ffd0',
-    stats:{ sep:1, rea:1, flu:1, hea:1, the:1 }, safety:1,
-    blurb:'Equally competent everywhere. Equally lost everywhere. Balanced.',
-    wrongLine:'"I am equally mediocre in every field. Honestly, it is a gift."',
-    rightLine:'"No strong opinions. Just a steady average and a clean record."' }
+  { id:'jojo', name:'Jojo Tarek', title:"The Boss's Cousin",
+    skin:'#e0b083', hair:'#241a12', hairStyle:'neat',
+    suit:'#25c9b0', suit2:'#17998a', trim:'#fff0b0', accent:'#ff5f8a',
+    floral:true, shades:true, shorts:true,
+    stats:{ sep:0, rea:0, flu:0, hea:0, the:0 }, safety:0,
+    hard:true,
+    blurb:'Nobody knows which department he is in. Nobody is sure he applied.',
+    wrongLine:'"Chemical engineering. That is the one with the beakers and the fizzing, yes?"',
+    rightLine:'"My uncle runs this place, so how hard can any of it possibly be."' }
 ];
 
 /* NPC definitions reuse the same rig */
@@ -56,7 +58,11 @@ const NPCS = {
                suit:'#4a4258', suit2:'#332d40', trim:'#e0dce8', accent:'#e0c060',
                build:1.06, beard:true, glasses:true },
   student:   { name:'', skin:'#cfa075', hair:'#241810', hairStyle:'neat',
-               suit:'#6a7a88', suit2:'#4c5a66', trim:'#c0ccd6', accent:'#88a0b0' }
+               suit:'#6a7a88', suit2:'#4c5a66', trim:'#c0ccd6', accent:'#88a0b0' },
+  /* hard mode only: the colleague who does not believe you passed an interview */
+  sus:       { name:'Bassam', skin:'#b8895a', hair:'#1b1410',
+               hairStyle:'neat', suit:'#46566a', suit2:'#2f3c4c', trim:'#c6d2de',
+               accent:'#8fe8b8', build:1.04, moustache:true }
 };
 
 
@@ -73,20 +79,96 @@ function capsule(x1,y1,x2,y2,w,col){
   g.strokeStyle = col; g.lineWidth = w; g.lineCap = 'round';
   g.beginPath(); g.moveTo(x1,y1); g.lineTo(x2,y2); g.stroke();
 }
+/* a hand, oriented along the forearm, with a thumb so it reads as a hand */
+function drawHand(col, a){
+  g.save(); g.rotate(-a);
+  g.fillStyle = col;
+  g.beginPath(); g.ellipse(0, 3.4, 4.3, 5.0, 0, 0, 7); g.fill();
+  g.beginPath(); g.ellipse(-3.4, 1.4, 1.8, 2.6, -0.55, 0, 7); g.fill();
+  g.fillStyle = 'rgba(0,0,0,.09)';
+  g.beginPath(); g.ellipse(1.6, 4.0, 1.9, 3.6, 0, 0, 7); g.fill();
+  g.restore();
+}
 /* two-segment limb hanging downward from (hx,hy) */
-function limb(hx,hy,a1,l1,a2,l2,w,col,endCol,endLen,endRound){
+function limb(hx,hy,a1,l1,a2,l2,w,col,endCol,endLen,isHand){
   const kx = hx + Math.sin(a1)*l1, ky = hy + Math.cos(a1)*l1;
   const fx = kx + Math.sin(a1+a2)*l2, fy = ky + Math.cos(a1+a2)*l2;
   capsule(hx,hy,kx,ky,w,col);
   capsule(kx,ky,fx,fy,w*0.9,col);
   if (endCol){
-    g.save(); g.translate(fx,fy); g.rotate(-(a1+a2)*0.45);
-    g.fillStyle = endCol;
-    if (endRound){ g.beginPath(); g.arc(0,0,endLen,0,7); g.fill(); }
-    else { rr(-endLen*0.34, -2.6, endLen, 6.8, 3); g.fill(); }
+    g.save(); g.translate(fx,fy);
+    if (isHand) drawHand(endCol, a1+a2);
+    else { g.rotate(-(a1+a2)*0.45); g.fillStyle = endCol;
+           rr(-endLen*0.34, -2.6, endLen, 6.8, 3); g.fill(); }
     g.restore();
   }
   return {kx,ky,fx,fy};
+}
+
+/* a leg, with an optional bare shin for anyone wearing shorts */
+function drawLeg(hx,hy,a1,l1,a2,l2,w,col,shinCol,footCol){
+  const kx = hx + Math.sin(a1)*l1, ky = hy + Math.cos(a1)*l1;
+  const fx = kx + Math.sin(a1+a2)*l2, fy = ky + Math.cos(a1+a2)*l2;
+  capsule(hx,hy,kx,ky,w,col);
+  capsule(kx,ky,fx,fy,w*0.9,shinCol || col);
+  g.save(); g.translate(fx,fy); g.rotate(-(a1+a2)*0.45);
+  g.fillStyle = footCol; rr(-4.4, -2.6, 13, 6.8, 3); g.fill();
+  if (shinCol){                       // a sandal strap, so it reads as a sandal
+    g.strokeStyle = 'rgba(0,0,0,.35)'; g.lineWidth = 1.6;
+    g.beginPath(); g.moveTo(-2, -2.6); g.lineTo(3, 1.2); g.stroke();
+  }
+  g.restore();
+  return {kx,ky,fx,fy};
+}
+
+/* ============================================================
+   Arm poses.  Angles: 0 = hanging straight down, positive swings
+   FORWARD (the way the character is facing), so a raised arm is a
+   large positive number, never a negative one.
+   Each entry is [frontUpper, frontElbow, backUpper, backElbow].
+   ============================================================ */
+const ARM_POSES = {
+  idle:      [ 0.10, 0.26, -0.10, 0.26 ],
+  talk:      [ 0.90, 0.80, -0.12, 0.30 ],
+  point:     [ 1.45, 0.10, -0.15, 0.28 ],
+  present:   [ 1.15, 0.55, -0.10, 0.30 ],
+  cheer:     [ 2.72,-0.22,  2.55,-0.22 ],
+  wave:      [ 2.35,-0.45, -0.12, 0.28 ],
+  work:      [ 1.75, 0.60,  0.30, 0.42 ],
+  think:     [ 1.90, 1.75, -0.10, 0.28 ],
+  panic:     [ 2.62,-0.18,  2.44,-0.18 ],
+  hold:      [ 1.30, 0.75, -0.10, 0.28 ],
+  shrug:     [ 1.62, 0.95, -1.62,-0.95 ],
+  reach:     [ 1.70, 0.20, -0.12, 0.28 ],
+  cross:     [ 1.15,-3.26,  1.05,-3.10 ],
+  clipboard: [ 1.25, 0.95,  0.55, 1.05 ],
+  grab:      [ 1.62, 0.18,  0.90, 0.55 ],
+  slump:     [-0.30, 0.55, -0.42, 0.55 ]
+};
+
+/* returns {aF,bF,aB,bB} for a pose, with its own idle motion mixed in */
+function armAngles(o, walking, ph, seed){
+  const pose = o.pose || (walking ? 'walk' : 'idle');
+  if (pose === 'walk'){
+    const sw = 0.6;
+    return { aF: Math.sin(ph + Math.PI) * sw, bF: 0.30 + Math.max(0, Math.sin(ph))*0.22,
+             aB: Math.sin(ph) * sw,           bB: 0.30 + Math.max(0, Math.sin(ph + Math.PI))*0.22 };
+  }
+  const p = ARM_POSES[pose] || ARM_POSES.idle;
+  let [aF, bF, aB, bB] = p;
+  const t = T + seed * 17;
+  switch (pose){
+    case 'idle':   aF += Math.sin(t/46)*0.05; aB -= Math.sin(t/46)*0.05; break;
+    case 'talk':   aF += Math.sin(t/9)*0.30;  bF += Math.sin(t/7)*0.16;  break;
+    case 'work':   aF += Math.sin(t/5)*0.42;  bF += Math.sin(t/5)*0.22;  break;
+    case 'cheer':  aF += Math.sin(t/7)*0.13;  aB += Math.sin(t/7+1)*0.13; break;
+    case 'wave':   aF += Math.sin(t/5)*0.05;  bF += Math.sin(t/4.5)*0.55; break;
+    case 'panic':  aF += Math.sin(t/3)*0.22;  aB += Math.sin(t/3+2)*0.22; break;
+    case 'point':  aF += Math.sin(t/13)*0.06; break;
+    case 'think':  bF += Math.sin(t/17)*0.07; break;
+    case 'present':aF += Math.sin(t/15)*0.07; break;
+  }
+  return { aF, bF, aB, bB };
 }
 
 /* ============================================================
@@ -96,7 +178,9 @@ function limb(hx,hy,a1,l1,a2,l2,w,col,endCol,endLen,endRound){
    o.walk   phase counter (0 / undefined = standing)
    o.face   neutral happy worry shock panic sweat proud sleep dead angry shame
    o.ppe    {goggles, hat, coat}
-   o.armF / o.armB   override arm angles (0 = hanging down, + = forward)
+   o.pose   a name from ARM_POSES — idle talk point present cheer wave work
+            think panic hold shrug reach cross clipboard grab slump
+   o.armF / o.armB   raw arm override, only when a pose will not do
    o.talk   jaw and head-bob animation
    o.tilt   whole-body rotation      o.lift  vertical offset
    o.squash vertical squash (1 = normal)
@@ -135,16 +219,29 @@ function drawPerson(def, x, y, scale, o={}){
   const bendB = walking ? Math.max(0, -Math.sin(ph + Math.PI)) * 0.55 : 0.10;
   const legW = 10.5;
   const spread = flat ? 6 : 3;
-  limb(-spread, hipY, lgB, thigh, bendB, shin, legW, def.suit2, boot, 13);
+  /* someone who turned up in shorts and sandals has bare shins */
+  const shinCol = def.shorts ? def.skin : null;
+  const footCol = def.shorts ? '#8a6a44' : boot;
+  drawLeg(-spread, hipY, lgB, thigh, bendB, shin, legW, def.suit2, shinCol, footCol);
+
+  /* ---- arm angles, from the named pose ---- */
+  const A = armAngles(o, walking, ph, seed);
+  const aB = o.armB     !== undefined ? o.armB     : A.aB + (flat ? -0.10 : 0);
+  const bB = o.armBBend !== undefined ? o.armBBend : A.bB;
+  const aF = o.armF     !== undefined ? o.armF     : A.aF + (flat ?  0.10 : 0);
+  const bF = o.armFBend !== undefined ? o.armFBend : A.bF;
 
   /* ---- back arm ---- */
-  const armSw = walking ? 0.6 : Math.sin(T/46 + seed) * 0.04;
-  const aB = o.armB !== undefined ? o.armB : Math.sin(ph) * armSw + (flat ? -0.18 : -0.1);
-  limb(flat ? -11 : -5, shoY, aB, upper, (o.armBBend === undefined ? 0.26 : o.armBBend),
-       fore, 8.6, def.suit2, def.skin, 4.6, true);
+  limb(flat ? -11 : -5, shoY, aB, upper, bB, fore, 8.6, def.suit2, def.skin, 4.6, true);
 
   /* ---- front leg ---- */
-  limb(spread, hipY, lgA, thigh, bendA, shin, legW, def.suit, boot, 13);
+  drawLeg(spread, hipY, lgA, thigh, bendA, shin, legW, def.suit, shinCol, footCol);
+
+  /* ---- neck, drawn behind the torso so the collar covers its base ---- */
+  g.fillStyle = def.skin;
+  rr(-4.8, headY + 4, 9.6, (shoY + 4) - (headY + 4), 3.5); g.fill();
+  g.fillStyle = 'rgba(0,0,0,.14)';
+  rr(-4.8, headY + 4, 9.6, 5, 3); g.fill();
 
   /* ---- torso ---- */
   const tw = flat ? 32 : 28;
@@ -153,6 +250,23 @@ function drawPerson(def, x, y, scale, o={}){
   if (!flat){
     g.fillStyle = 'rgba(0,0,0,.13)';
     rr(tw/2 - 9, shoY - 5, 9, (hipY - shoY) + 13, 9); g.fill();
+  }
+  /* a loud holiday shirt, for the man who did not read the dress code */
+  if (def.floral){
+    g.save();
+    g.beginPath(); rr(-tw/2, shoY - 5, tw, (hipY - shoY) + 13, 10); g.clip();
+    for (let i=0;i<11;i++){
+      const fx2 = -tw/2 + 3 + nz(i*3+1)*(tw-6);
+      const fy2 = shoY + 2 + nz(i*5+2)*((hipY - shoY) + 6);
+      g.fillStyle = i%3===0 ? def.accent : i%3===1 ? '#fff0b0' : 'rgba(255,255,255,.55)';
+      for (let k=0;k<5;k++){
+        const a = k/5*Math.PI*2 + i;
+        g.beginPath(); g.ellipse(fx2+Math.cos(a)*2.4, fy2+Math.sin(a)*2.4, 1.8, 1.8, 0, 0, 7); g.fill();
+      }
+      g.fillStyle='rgba(255,220,90,.9)';
+      g.beginPath(); g.arc(fx2, fy2, 1.5, 0, 7); g.fill();
+    }
+    g.restore();
   }
   // belt
   g.fillStyle = 'rgba(0,0,0,.2)'; rr(-tw/2, hipY - 2, tw, 6, 2); g.fill();
@@ -184,9 +298,7 @@ function drawPerson(def, x, y, scale, o={}){
   }
 
   /* ---- front arm ---- */
-  const aF = o.armF !== undefined ? o.armF : Math.sin(ph + Math.PI) * armSw + (flat ? 0.18 : 0.1);
-  const fa = limb(flat ? 11 : 5, shoY, aF, upper,
-                  (o.armFBend === undefined ? 0.26 : o.armFBend), fore, 8.6,
+  const fa = limb(flat ? 11 : 5, shoY, aF, upper, bF, fore, 8.6,
                   def.suit, def.skin, 4.6, true);
   if (o.holdDraw){ g.save(); g.translate(fa.fx, fa.fy); o.holdDraw(g); g.restore(); }
 
@@ -205,10 +317,6 @@ function drawHead(def, o, dir){
   const face = o.face || 'neutral';
   const front = (dir === 'front');
   const back  = (dir === 'back');
-
-  // neck
-  g.fillStyle = def.skin; rr(-4.6, 9, 9.2, 9, 3); g.fill();
-  g.fillStyle = 'rgba(0,0,0,.12)'; rr(-4.6, 9, 9.2, 3.4, 2); g.fill();
 
   hairBack(def, o);
 
@@ -321,6 +429,18 @@ function drawHead(def, o, dir){
     [exL, exR].forEach(e=>{ g.beginPath(); g.arc(e, -1.4, lr, 0, 7); g.fill(); g.stroke(); });
     g.beginPath(); g.moveTo(exL+lr, -1.6); g.lineTo(exR-lr, -1.6); g.stroke();
     g.beginPath(); g.moveTo(exR+lr, -1.8); g.lineTo(exR+lr+3.4, -2.6); g.stroke();
+  }
+
+  /* sunglasses parked on the forehead, never actually used */
+  if (def.shades && !(o.ppe && o.ppe.hat)){
+    g.fillStyle = '#1b2026';
+    rr(-11.8, -11.6, 23.6, 6.2, 2.6); g.fill();
+    g.fillStyle = 'rgba(120,200,235,.45)';
+    rr(-10.6, -10.8, 9.6, 4.6, 2); g.fill();
+    rr(1.0,   -10.8, 9.6, 4.6, 2); g.fill();
+    g.strokeStyle = '#1b2026'; g.lineWidth = 1.8;
+    g.beginPath(); g.moveTo(-11.8,-8.6); g.lineTo(-14.4,-7.6);
+    g.moveTo(11.8,-8.6); g.lineTo(14.4,-7.6); g.stroke();
   }
 
   /* ---- PPE ---- */

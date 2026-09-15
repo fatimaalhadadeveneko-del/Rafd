@@ -137,7 +137,7 @@ const S_brk = {
       dir: this.px < dinaX ? 'left' : 'right',
       face: this.mode==='wake' ? 'shock' : 'happy',
       talk: dinaTalk, seed:9,
-      armF: dinaTalk ? -0.7 - Math.sin(T/9)*0.35 : undefined, armFBend: dinaTalk ? 0.9 : undefined
+      pose: dinaTalk ? 'talk' : 'idle'
     });
     txt(NPCS.colleague.name, dinaX, 596, 13, 'rgba(234,244,250,.5)');
 
@@ -148,13 +148,13 @@ const S_brk = {
                  ppe:{ hat:false, goggles:false, coat:G.ppe.coat } };
     if (this.mode === 'sleep'){
       hopt = Object.assign(hopt, { dir:'right', walk:0, face:'sleep',
-        lift:-38, headTilt:0.42, armF:0.1, armB:-0.1, squash:0.96 });
+        lift:-38, headTilt:0.42, pose:'slump', squash:0.96 });
       this.zT += dt;
       if (this.zT > 34){ this.zT = 0; emitZ(this.px+26, this.py-168); }
     } else if (this.mode === 'wake'){
       hopt = Object.assign(hopt, { dir:'right', walk:0,
         face: this.gaspT>0 ? 'panic' : 'worry', lift:-38,
-        sweat: this.gaspT>0 ? 3 : 1, armF:-1.3, armB:-1.1 });
+        sweat: this.gaspT>0 ? 3 : 1, pose:'panic' });
       if (this.gaspT>0) this.gaspT -= dt;
     } else if (this.mode === 'chat'){
       hopt.face = 'happy';
@@ -405,9 +405,7 @@ const S_dream = {
     drawPerson(NPCS.prof, 300, 560, 2.15, {
       dir:'right', face: angry ? 'angry' : profTalk ? 'angry' : 'neutral',
       talk: profTalk, seed:2,
-      armF: angry ? -2.5 + Math.sin(T/4)*0.3
-          : profTalk ? -1.2 - Math.sin(T/8)*0.5 : undefined,
-      armFBend: (angry||profTalk) ? 0.7 : undefined,
+      pose: (this.phase==='stamp') ? 'grab' : angry ? 'point' : profTalk ? 'talk' : 'idle',
       holdDraw: (this.phase==='stamp') ? (c)=>{
         c.save(); c.rotate(-0.4);
         c.fillStyle='#3b2a20'; rr(-7,-16,14,16,3); c.fill();
@@ -430,7 +428,7 @@ const S_dream = {
       const k = easeIn(this.fallK);
       drawPerson(hero, this.boardX + 40*k, 560 + 4*k, 2.0, {
         dir:'left', face:'dead', tilt: -k*Math.PI/2*0.92, lift: -6*Math.sin(k*Math.PI),
-        armF: -1.9, armB: 1.6, seed:5 });
+        pose: 'panic', seed:5 });
       // the F stamped on the forehead, riding along
       g.save();
       g.translate(this.boardX + 40*k, 560 + 4*k);
@@ -459,7 +457,7 @@ const S_dream = {
         dir: this.walking ? 'left' : 'right',
         walk: this.walking ? T*2.2 : 0,
         face: hf, sweat: stress, seed:5,
-        armF: this.phase==='quiz' ? -0.35 + Math.sin(T/6)*0.12 : undefined,
+        pose: this.phase==='quiz' ? 'think' : this.phase==='stamp' ? 'panic' : undefined,
         tilt: this.phase==='stamp' ? Math.sin(T/3)*0.04 : 0
       });
       if (this.phase==='stamp'){

@@ -640,13 +640,15 @@ const CHARS = [
     wrongLine:'"Entropy is basically how fast the pump is spinning."',
     rightLine:'"If it is moving, I can tell you exactly how and why."' },
 
-  { id:'sami', name:'Sami Rahim', title:'The Generalist',
-    skin:'#d9a878', hair:'#3a2418', hairStyle:'neat',
-    suit:'#7b6ee0', suit2:'#5b4fb8', trim:'#d8d2ff', accent:'#a0ffd0',
-    stats:{ sep:1, rea:1, flu:1, hea:1, the:1 }, safety:1,
-    blurb:'Equally competent everywhere. Equally lost everywhere. Balanced.',
-    wrongLine:'"I am equally mediocre in every field. Honestly, it is a gift."',
-    rightLine:'"No strong opinions. Just a steady average and a clean record."' }
+  { id:'jojo', name:'Jojo Tarek', title:"The Boss's Cousin",
+    skin:'#e0b083', hair:'#241a12', hairStyle:'neat',
+    suit:'#25c9b0', suit2:'#17998a', trim:'#fff0b0', accent:'#ff5f8a',
+    floral:true, shades:true, shorts:true,
+    stats:{ sep:0, rea:0, flu:0, hea:0, the:0 }, safety:0,
+    hard:true,
+    blurb:'Nobody knows which department he is in. Nobody is sure he applied.',
+    wrongLine:'"Chemical engineering. That is the one with the beakers and the fizzing, yes?"',
+    rightLine:'"My uncle runs this place, so how hard can any of it possibly be."' }
 ];
 
 /* NPC definitions reuse the same rig */
@@ -668,7 +670,11 @@ const NPCS = {
                suit:'#4a4258', suit2:'#332d40', trim:'#e0dce8', accent:'#e0c060',
                build:1.06, beard:true, glasses:true },
   student:   { name:'', skin:'#cfa075', hair:'#241810', hairStyle:'neat',
-               suit:'#6a7a88', suit2:'#4c5a66', trim:'#c0ccd6', accent:'#88a0b0' }
+               suit:'#6a7a88', suit2:'#4c5a66', trim:'#c0ccd6', accent:'#88a0b0' },
+  /* hard mode only: the colleague who does not believe you passed an interview */
+  sus:       { name:'Bassam', skin:'#b8895a', hair:'#1b1410',
+               hairStyle:'neat', suit:'#46566a', suit2:'#2f3c4c', trim:'#c6d2de',
+               accent:'#8fe8b8', build:1.04, moustache:true }
 };
 
 
@@ -685,20 +691,96 @@ function capsule(x1,y1,x2,y2,w,col){
   g.strokeStyle = col; g.lineWidth = w; g.lineCap = 'round';
   g.beginPath(); g.moveTo(x1,y1); g.lineTo(x2,y2); g.stroke();
 }
+/* a hand, oriented along the forearm, with a thumb so it reads as a hand */
+function drawHand(col, a){
+  g.save(); g.rotate(-a);
+  g.fillStyle = col;
+  g.beginPath(); g.ellipse(0, 3.4, 4.3, 5.0, 0, 0, 7); g.fill();
+  g.beginPath(); g.ellipse(-3.4, 1.4, 1.8, 2.6, -0.55, 0, 7); g.fill();
+  g.fillStyle = 'rgba(0,0,0,.09)';
+  g.beginPath(); g.ellipse(1.6, 4.0, 1.9, 3.6, 0, 0, 7); g.fill();
+  g.restore();
+}
 /* two-segment limb hanging downward from (hx,hy) */
-function limb(hx,hy,a1,l1,a2,l2,w,col,endCol,endLen,endRound){
+function limb(hx,hy,a1,l1,a2,l2,w,col,endCol,endLen,isHand){
   const kx = hx + Math.sin(a1)*l1, ky = hy + Math.cos(a1)*l1;
   const fx = kx + Math.sin(a1+a2)*l2, fy = ky + Math.cos(a1+a2)*l2;
   capsule(hx,hy,kx,ky,w,col);
   capsule(kx,ky,fx,fy,w*0.9,col);
   if (endCol){
-    g.save(); g.translate(fx,fy); g.rotate(-(a1+a2)*0.45);
-    g.fillStyle = endCol;
-    if (endRound){ g.beginPath(); g.arc(0,0,endLen,0,7); g.fill(); }
-    else { rr(-endLen*0.34, -2.6, endLen, 6.8, 3); g.fill(); }
+    g.save(); g.translate(fx,fy);
+    if (isHand) drawHand(endCol, a1+a2);
+    else { g.rotate(-(a1+a2)*0.45); g.fillStyle = endCol;
+           rr(-endLen*0.34, -2.6, endLen, 6.8, 3); g.fill(); }
     g.restore();
   }
   return {kx,ky,fx,fy};
+}
+
+/* a leg, with an optional bare shin for anyone wearing shorts */
+function drawLeg(hx,hy,a1,l1,a2,l2,w,col,shinCol,footCol){
+  const kx = hx + Math.sin(a1)*l1, ky = hy + Math.cos(a1)*l1;
+  const fx = kx + Math.sin(a1+a2)*l2, fy = ky + Math.cos(a1+a2)*l2;
+  capsule(hx,hy,kx,ky,w,col);
+  capsule(kx,ky,fx,fy,w*0.9,shinCol || col);
+  g.save(); g.translate(fx,fy); g.rotate(-(a1+a2)*0.45);
+  g.fillStyle = footCol; rr(-4.4, -2.6, 13, 6.8, 3); g.fill();
+  if (shinCol){                       // a sandal strap, so it reads as a sandal
+    g.strokeStyle = 'rgba(0,0,0,.35)'; g.lineWidth = 1.6;
+    g.beginPath(); g.moveTo(-2, -2.6); g.lineTo(3, 1.2); g.stroke();
+  }
+  g.restore();
+  return {kx,ky,fx,fy};
+}
+
+/* ============================================================
+   Arm poses.  Angles: 0 = hanging straight down, positive swings
+   FORWARD (the way the character is facing), so a raised arm is a
+   large positive number, never a negative one.
+   Each entry is [frontUpper, frontElbow, backUpper, backElbow].
+   ============================================================ */
+const ARM_POSES = {
+  idle:      [ 0.10, 0.26, -0.10, 0.26 ],
+  talk:      [ 0.90, 0.80, -0.12, 0.30 ],
+  point:     [ 1.45, 0.10, -0.15, 0.28 ],
+  present:   [ 1.15, 0.55, -0.10, 0.30 ],
+  cheer:     [ 2.72,-0.22,  2.55,-0.22 ],
+  wave:      [ 2.35,-0.45, -0.12, 0.28 ],
+  work:      [ 1.75, 0.60,  0.30, 0.42 ],
+  think:     [ 1.90, 1.75, -0.10, 0.28 ],
+  panic:     [ 2.62,-0.18,  2.44,-0.18 ],
+  hold:      [ 1.30, 0.75, -0.10, 0.28 ],
+  shrug:     [ 1.62, 0.95, -1.62,-0.95 ],
+  reach:     [ 1.70, 0.20, -0.12, 0.28 ],
+  cross:     [ 1.15,-3.26,  1.05,-3.10 ],
+  clipboard: [ 1.25, 0.95,  0.55, 1.05 ],
+  grab:      [ 1.62, 0.18,  0.90, 0.55 ],
+  slump:     [-0.30, 0.55, -0.42, 0.55 ]
+};
+
+/* returns {aF,bF,aB,bB} for a pose, with its own idle motion mixed in */
+function armAngles(o, walking, ph, seed){
+  const pose = o.pose || (walking ? 'walk' : 'idle');
+  if (pose === 'walk'){
+    const sw = 0.6;
+    return { aF: Math.sin(ph + Math.PI) * sw, bF: 0.30 + Math.max(0, Math.sin(ph))*0.22,
+             aB: Math.sin(ph) * sw,           bB: 0.30 + Math.max(0, Math.sin(ph + Math.PI))*0.22 };
+  }
+  const p = ARM_POSES[pose] || ARM_POSES.idle;
+  let [aF, bF, aB, bB] = p;
+  const t = T + seed * 17;
+  switch (pose){
+    case 'idle':   aF += Math.sin(t/46)*0.05; aB -= Math.sin(t/46)*0.05; break;
+    case 'talk':   aF += Math.sin(t/9)*0.30;  bF += Math.sin(t/7)*0.16;  break;
+    case 'work':   aF += Math.sin(t/5)*0.42;  bF += Math.sin(t/5)*0.22;  break;
+    case 'cheer':  aF += Math.sin(t/7)*0.13;  aB += Math.sin(t/7+1)*0.13; break;
+    case 'wave':   aF += Math.sin(t/5)*0.05;  bF += Math.sin(t/4.5)*0.55; break;
+    case 'panic':  aF += Math.sin(t/3)*0.22;  aB += Math.sin(t/3+2)*0.22; break;
+    case 'point':  aF += Math.sin(t/13)*0.06; break;
+    case 'think':  bF += Math.sin(t/17)*0.07; break;
+    case 'present':aF += Math.sin(t/15)*0.07; break;
+  }
+  return { aF, bF, aB, bB };
 }
 
 /* ============================================================
@@ -708,7 +790,9 @@ function limb(hx,hy,a1,l1,a2,l2,w,col,endCol,endLen,endRound){
    o.walk   phase counter (0 / undefined = standing)
    o.face   neutral happy worry shock panic sweat proud sleep dead angry shame
    o.ppe    {goggles, hat, coat}
-   o.armF / o.armB   override arm angles (0 = hanging down, + = forward)
+   o.pose   a name from ARM_POSES — idle talk point present cheer wave work
+            think panic hold shrug reach cross clipboard grab slump
+   o.armF / o.armB   raw arm override, only when a pose will not do
    o.talk   jaw and head-bob animation
    o.tilt   whole-body rotation      o.lift  vertical offset
    o.squash vertical squash (1 = normal)
@@ -747,16 +831,29 @@ function drawPerson(def, x, y, scale, o={}){
   const bendB = walking ? Math.max(0, -Math.sin(ph + Math.PI)) * 0.55 : 0.10;
   const legW = 10.5;
   const spread = flat ? 6 : 3;
-  limb(-spread, hipY, lgB, thigh, bendB, shin, legW, def.suit2, boot, 13);
+  /* someone who turned up in shorts and sandals has bare shins */
+  const shinCol = def.shorts ? def.skin : null;
+  const footCol = def.shorts ? '#8a6a44' : boot;
+  drawLeg(-spread, hipY, lgB, thigh, bendB, shin, legW, def.suit2, shinCol, footCol);
+
+  /* ---- arm angles, from the named pose ---- */
+  const A = armAngles(o, walking, ph, seed);
+  const aB = o.armB     !== undefined ? o.armB     : A.aB + (flat ? -0.10 : 0);
+  const bB = o.armBBend !== undefined ? o.armBBend : A.bB;
+  const aF = o.armF     !== undefined ? o.armF     : A.aF + (flat ?  0.10 : 0);
+  const bF = o.armFBend !== undefined ? o.armFBend : A.bF;
 
   /* ---- back arm ---- */
-  const armSw = walking ? 0.6 : Math.sin(T/46 + seed) * 0.04;
-  const aB = o.armB !== undefined ? o.armB : Math.sin(ph) * armSw + (flat ? -0.18 : -0.1);
-  limb(flat ? -11 : -5, shoY, aB, upper, (o.armBBend === undefined ? 0.26 : o.armBBend),
-       fore, 8.6, def.suit2, def.skin, 4.6, true);
+  limb(flat ? -11 : -5, shoY, aB, upper, bB, fore, 8.6, def.suit2, def.skin, 4.6, true);
 
   /* ---- front leg ---- */
-  limb(spread, hipY, lgA, thigh, bendA, shin, legW, def.suit, boot, 13);
+  drawLeg(spread, hipY, lgA, thigh, bendA, shin, legW, def.suit, shinCol, footCol);
+
+  /* ---- neck, drawn behind the torso so the collar covers its base ---- */
+  g.fillStyle = def.skin;
+  rr(-4.8, headY + 4, 9.6, (shoY + 4) - (headY + 4), 3.5); g.fill();
+  g.fillStyle = 'rgba(0,0,0,.14)';
+  rr(-4.8, headY + 4, 9.6, 5, 3); g.fill();
 
   /* ---- torso ---- */
   const tw = flat ? 32 : 28;
@@ -765,6 +862,23 @@ function drawPerson(def, x, y, scale, o={}){
   if (!flat){
     g.fillStyle = 'rgba(0,0,0,.13)';
     rr(tw/2 - 9, shoY - 5, 9, (hipY - shoY) + 13, 9); g.fill();
+  }
+  /* a loud holiday shirt, for the man who did not read the dress code */
+  if (def.floral){
+    g.save();
+    g.beginPath(); rr(-tw/2, shoY - 5, tw, (hipY - shoY) + 13, 10); g.clip();
+    for (let i=0;i<11;i++){
+      const fx2 = -tw/2 + 3 + nz(i*3+1)*(tw-6);
+      const fy2 = shoY + 2 + nz(i*5+2)*((hipY - shoY) + 6);
+      g.fillStyle = i%3===0 ? def.accent : i%3===1 ? '#fff0b0' : 'rgba(255,255,255,.55)';
+      for (let k=0;k<5;k++){
+        const a = k/5*Math.PI*2 + i;
+        g.beginPath(); g.ellipse(fx2+Math.cos(a)*2.4, fy2+Math.sin(a)*2.4, 1.8, 1.8, 0, 0, 7); g.fill();
+      }
+      g.fillStyle='rgba(255,220,90,.9)';
+      g.beginPath(); g.arc(fx2, fy2, 1.5, 0, 7); g.fill();
+    }
+    g.restore();
   }
   // belt
   g.fillStyle = 'rgba(0,0,0,.2)'; rr(-tw/2, hipY - 2, tw, 6, 2); g.fill();
@@ -796,9 +910,7 @@ function drawPerson(def, x, y, scale, o={}){
   }
 
   /* ---- front arm ---- */
-  const aF = o.armF !== undefined ? o.armF : Math.sin(ph + Math.PI) * armSw + (flat ? 0.18 : 0.1);
-  const fa = limb(flat ? 11 : 5, shoY, aF, upper,
-                  (o.armFBend === undefined ? 0.26 : o.armFBend), fore, 8.6,
+  const fa = limb(flat ? 11 : 5, shoY, aF, upper, bF, fore, 8.6,
                   def.suit, def.skin, 4.6, true);
   if (o.holdDraw){ g.save(); g.translate(fa.fx, fa.fy); o.holdDraw(g); g.restore(); }
 
@@ -817,10 +929,6 @@ function drawHead(def, o, dir){
   const face = o.face || 'neutral';
   const front = (dir === 'front');
   const back  = (dir === 'back');
-
-  // neck
-  g.fillStyle = def.skin; rr(-4.6, 9, 9.2, 9, 3); g.fill();
-  g.fillStyle = 'rgba(0,0,0,.12)'; rr(-4.6, 9, 9.2, 3.4, 2); g.fill();
 
   hairBack(def, o);
 
@@ -933,6 +1041,18 @@ function drawHead(def, o, dir){
     [exL, exR].forEach(e=>{ g.beginPath(); g.arc(e, -1.4, lr, 0, 7); g.fill(); g.stroke(); });
     g.beginPath(); g.moveTo(exL+lr, -1.6); g.lineTo(exR-lr, -1.6); g.stroke();
     g.beginPath(); g.moveTo(exR+lr, -1.8); g.lineTo(exR+lr+3.4, -2.6); g.stroke();
+  }
+
+  /* sunglasses parked on the forehead, never actually used */
+  if (def.shades && !(o.ppe && o.ppe.hat)){
+    g.fillStyle = '#1b2026';
+    rr(-11.8, -11.6, 23.6, 6.2, 2.6); g.fill();
+    g.fillStyle = 'rgba(120,200,235,.45)';
+    rr(-10.6, -10.8, 9.6, 4.6, 2); g.fill();
+    rr(1.0,   -10.8, 9.6, 4.6, 2); g.fill();
+    g.strokeStyle = '#1b2026'; g.lineWidth = 1.8;
+    g.beginPath(); g.moveTo(-11.8,-8.6); g.lineTo(-14.4,-7.6);
+    g.moveTo(11.8,-8.6); g.lineTo(14.4,-7.6); g.stroke();
   }
 
   /* ---- PPE ---- */
@@ -1764,12 +1884,17 @@ const G = {
   sheet: false,              // picked up the Reynolds cheat sheet
   hintUsed: {},              // per station
   blunders: 0,
+  quizDone: {},              // station key -> true, hard mode only
   reset(){
     for (const k in this.got){ this.got[k]=0; this.maxp[k]=0; }
     this.done = {}; this.ppe = {goggles:false,coat:false,hat:false}; this.ppeTries=0;
-    this.sheet=false; this.hintUsed={}; this.blunders=0;
+    this.sheet=false; this.hintUsed={}; this.blunders=0; this.quizDone={};
   }
 };
+
+/* Hard mode rides on the character you pick: the boss's cousin gets no hints,
+   no guide bands, misreads everything, and is followed around by Bassam. */
+function isHard(){ return !!hero.hard; }
 
 /* award(key, earned, possible) */
 function award(key, earned, possible){
@@ -1795,8 +1920,16 @@ function subjectPct(k){
    0 weak   : no help, and offers a confidently wrong opinion
 ------------------------------------------------- */
 function skill(k){ return hero.stats[k] === undefined ? 1 : hero.stats[k]; }
-function isStrong(k){ return skill(k) === 2; }
-function isWeak(k){ return skill(k) === 0; }
+function isStrong(k){ return skill(k) === 2 && !isHard(); }
+function isWeak(k){ return skill(k) === 0 || isHard(); }
+
+/* Guide rails — the green target bands, the ghost outlines and the coffee hint
+   are all crutches.  A weak engineer in that subject does not get them, and the
+   boss's cousin never gets them at all. */
+function showGuide(k){ return !isHard() && skill(k) > 0; }
+function ghostHelp(k){ return isStrong(k); }
+/* a shaky engineer has to look twice before the game will let them commit */
+function needsInspection(k){ return isHard() || skill(k) === 0; }
 
 /* what the engineer mutters when they look at a problem */
 const MUTTER = {
@@ -1816,12 +1949,23 @@ const MUTTER = {
          1:'Thermo. I remember most of it.',
          0:'Thermo. Please, not thermo.' }
 };
+/* the cousin has his own, worse, commentary */
+const HARD_MUTTER = {
+  sep:'Separation. So we separate it. I do not see the difficulty here.',
+  rea:'A reactor. Like a microwave, but industrial. I have used a microwave.',
+  flu:'Pipes. You point them where you want the stuff to go. Done.',
+  hea:'Heat transfer. You turn the dial until the number looks nicer.',
+  the:'Thermo. My uncle said I would not need this one.'
+};
+function mutterFor(k){ return isHard() ? HARD_MUTTER[k] : MUTTER[k][skill(k)]; }
 
 /* ---------------- coffee hint ---------------- */
 const Hint = {
   station:null, shown:0, text:'',
   begin(station){ this.station = station; this.shown = 0; this.text=''; },
-  available(){ return !G.hintUsed[this.station]; },
+  /* hard mode has no coffee, no hints, no mercy */
+  offered(){ return !isHard(); },
+  available(){ return !isHard() && !G.hintUsed[this.station]; },
   use(text){
     if (!this.available()) return false;
     G.hintUsed[this.station] = true;
@@ -1831,6 +1975,7 @@ const Hint = {
   },
   /* draw the coffee cup button + the thought bubble */
   draw(x, y, anchorX, anchorY){
+    if (!this.offered()) return false;
     if (this.shown > 0){
       this.shown -= dt;
       thought(this.text, anchorX, anchorY, { w:280, size:17, reveal:1e9 });
@@ -1905,6 +2050,158 @@ function Convo(lines, onDone, opt={}){
 
 /* helper: is this convo line from the hero? */
 function heroTalking(c){ return c && !c.done && c.line.by === hero.name; }
+
+/* ============================================================
+   Bassam's exit quiz — hard mode only.  He blocks the door of each
+   unit room and asks three true/false questions before letting you out.
+   ============================================================ */
+const TF_QUIZ = {
+  sep: [
+    { q:'Liquid holdup is the quantity of liquid contained in the packed bed.', a:true,
+      why:'That is exactly what holdup means: the liquid sitting inside the packing at any moment.' },
+    { q:'For equimolar counterdiffusion in a binary mixture, both components diffuse in the same direction.', a:false,
+      why:'Counterdiffusion means they pass each other going opposite ways, mole for mole.' },
+    { q:'Distillation can separate components of a liquid mixture based on differences in their volatility.', a:true,
+      why:'A difference in volatility is the entire basis of distillation.' }
+  ],
+  rea: [
+    { q:'For a given reaction, increasing reactant concentration will always increase the reaction rate, regardless of the form of the rate law.', a:false,
+      why:'Zero order in that reactant, or a catalyst already saturated, and the rate does not move at all.' },
+    { q:'Mass-transfer limitations can reduce the conversion achieved in a reactor.', a:true,
+      why:'If reactant cannot reach the active site fast enough, the observed rate falls and so does conversion.' },
+    { q:'For a first-order irreversible reaction, a CSTR generally achieves a higher conversion than a PFR of the same volume under identical feed conditions.', a:false,
+      why:'A CSTR sits at the low outlet concentration throughout, so it needs more volume. The PFR wins.' }
+  ],
+  flu: [
+    { q:'The Reynolds number represents the ratio of viscous forces to inertial forces.', a:false,
+      why:'The other way round. Inertial over viscous.' },
+    { q:'For flow through a pipe, the volumetric flow rate is equal to the fluid velocity divided by the cross-sectional area.', a:false,
+      why:'Q equals v times A. Multiplied, not divided.' },
+    { q:'The pressure drop due to friction in a pipe decreases as the pipe length increases.', a:false,
+      why:'Friction loss grows with length. A longer pipe costs you more pressure, not less.' }
+  ],
+  hea: [
+    { q:'In steady-state heat conduction, the temperature at every point in the system must be constant and equal.', a:false,
+      why:'Constant in time, yes. Equal everywhere, no. Without a gradient nothing would conduct at all.' },
+    { q:'The convection heat transfer coefficient, h, is a material property that depends only on the type of fluid.', a:false,
+      why:'h also depends on geometry, flow regime and velocity. It is not a property of the fluid alone.' },
+    { q:'Thermal radiation can transfer energy through a vacuum without requiring a material medium.', a:true,
+      why:'Radiation needs no medium whatsoever. That is how the sun reaches you.' }
+  ]
+};
+
+/* Bassam's opening jab per station, so he is not repeating himself */
+const SUS_INTRO = {
+  sep: 'Before you go. Three questions. Humour me.',
+  rea: 'Not so fast. I watched that. Three questions.',
+  flu: 'One moment. I want to check something about you.',
+  hea: 'Last one, I promise. Then I will leave you alone. Probably.'
+};
+const SUS_PASS = [
+  'Hm. Fine. Maybe somebody did teach you something.',
+  'Two out of three. I am revising my theory. Slightly.',
+  'All three. I genuinely did not expect that. Carry on.'
+];
+const SUS_FAIL = [
+  'None of them. Not one. I am writing this down.',
+  'That was painful to watch. Go. Just go.',
+  'I am going to have a word with your uncle.'
+];
+
+/* returns a drawable quiz; call draw() each frame, it calls onDone(correct) */
+function makeTFQuiz(key, onDone){
+  const qs = TF_QUIZ[key] || [];
+  return {
+    i:0, picked:null, fb:0, correct:0, pop:0, closing:0,
+    finished:false,
+    draw(){
+      /* the man himself, arms folded in the doorway */
+      shade(.72);
+      const bx = 250, by = 600;
+      drawPerson(NPCS.sus, bx, by, 2.5, {
+        dir:'right', seed:23,
+        face: this.fb > 0 ? (this.wasRight ? 'neutral' : 'angry') : 'neutral',
+        pose: this.fb > 0 ? 'point' : 'cross',
+        talk: this.fb <= 0 && this.pop < 1
+      });
+      txt(NPCS.sus.name, bx, by + 28, 15, '#9fd8ef');
+      txt('Process Safety. Allegedly.', bx, by + 48, 12, 'rgba(159,216,239,.55)','center',400);
+
+      if (this.finished){
+        this.closing -= dt;
+        const msg = this.correct === 3 ? SUS_PASS[2]
+                  : this.correct === 2 ? SUS_PASS[1]
+                  : this.correct === 1 ? SUS_PASS[0]
+                  : SUS_FAIL[0];
+        bubble(msg, bx + 40, by - 250, { w:360, size:18, pop:1 });
+        panel(W/2-220, H-118, 440, 60, 'rgba(4,18,28,.96)',
+              this.correct >= 2 ? '#3fd07f' : '#ee5f6e');
+        txt(this.correct + ' of 3 correct', W/2, H-88, 22,
+            this.correct >= 2 ? '#8fe8b8' : '#f0b0bc');
+        if (this.closing <= 0 && button('GO BACK TO WORK', W/2-130, H-48, 260, 40,
+                                        { col:'#3fd07f', size:16 })){
+          onDone(this.correct);
+        }
+        return;
+      }
+
+      const q = qs[this.i];
+      this.pop = Math.min(1, this.pop + dt/12);
+
+      txt('HARD MODE  ·  ' + (this.i+1) + ' of 3', W/2, 74, 15, '#f5b53d');
+      if (this.i === 0 && this.fb <= 0)
+        bubble(SUS_INTRO[key], bx + 40, by - 250, { w:320, size:17, pop:this.pop });
+
+      panel(W/2-400, 150, 800, 150, 'rgba(6,24,36,.97)', 'rgba(35,166,224,.6)');
+      wrapText(q.q, W/2, 210, 730, 30, 21, '#eaf4fa', 'center', 400);
+
+      const bw = 240, bh = 64, gap = 40;
+      [['TRUE', true], ['FALSE', false]].forEach(([lab, val], k)=>{
+        const bx2 = W/2 - bw - gap/2 + k*(bw+gap), by2 = 344;
+        const locked = this.fb > 0;
+        const chosen = locked && this.picked === val;
+        const isRight = val === q.a;
+        const z = zone(bx2, by2, bw, bh);
+        g.save();
+        if (z.hover && !locked){ g.shadowColor='#23a6e0'; g.shadowBlur=22; }
+        g.fillStyle = chosen ? (isRight ? 'rgba(16,70,48,.98)' : 'rgba(70,18,26,.98)')
+                    : locked && isRight ? 'rgba(16,70,48,.72)'
+                    : locked ? 'rgba(12,28,38,.7)'
+                    : z.hover ? 'rgba(16,58,80,.98)' : 'rgba(8,32,46,.95)';
+        rr(bx2, z.hover && !locked ? by2-3 : by2, bw, bh, 12); g.fill();
+        g.restore();
+        g.strokeStyle = chosen ? (isRight ? '#3fd07f' : '#ee5f6e')
+                      : locked && isRight ? '#3fd07f'
+                      : locked ? 'rgba(120,150,165,.3)'
+                      : z.hover ? '#23a6e0' : 'rgba(35,166,224,.4)';
+        g.lineWidth = chosen ? 3.4 : 2;
+        rr(bx2, z.hover && !locked ? by2-3 : by2, bw, bh, 12); g.stroke();
+        txt(lab, bx2+bw/2, (z.hover && !locked ? by2-3 : by2)+bh/2, 26,
+            locked && !chosen && !isRight ? 'rgba(200,220,232,.35)' : '#eaf4fa');
+        if (z.clicked && !locked) this.answer(val, q);
+      });
+
+      if (this.fb > 0){
+        this.fb -= dt;
+        panel(W/2-400, 442, 800, 118, this.wasRight ? 'rgba(8,40,28,.97)' : 'rgba(44,12,18,.97)',
+              this.wasRight ? '#3fd07f' : '#ee5f6e');
+        txt(this.wasRight ? 'CORRECT' : 'WRONG', W/2, 474, 24,
+            this.wasRight ? '#3fd07f' : '#ee5f6e');
+        wrapText(q.why, W/2, 514, 730, 24, 18, '#dceaf2', 'center', 400);
+        if (this.fb <= 0){
+          this.fb = 0; this.i++; this.picked = null; this.pop = 0;
+          if (this.i >= qs.length){ this.finished = true; this.closing = 40; SFX.click(); }
+        }
+      }
+    },
+    answer(val, q){
+      this.picked = val;
+      this.wasRight = (val === q.a);
+      if (this.wasRight){ this.correct++; SFX.good(); } else { SFX.bad(); }
+      this.fb = 150;
+    }
+  };
+}
 
 
 /* ===== 06-menus.js ===== */
@@ -2156,6 +2453,13 @@ const S_select = {
 
       txt(c.name, x+cw/2, yy+226, 21, on ? '#fff' : '#cfe6f2');
       txt(c.title, x+cw/2, yy+250, 15, c.suit, 'center', 700);
+      if (c.hard){
+        const hw = 116, hx = x+cw/2-hw/2, hy2 = yy+12;
+        g.save();
+        g.fillStyle = `rgba(238,95,110,${on ? .95 : .7})`;
+        g.rotate(0); rr(hx, hy2, hw, 22, 6); g.fill(); g.restore();
+        txt('HARD MODE', x+cw/2, hy2+11, 13, '#1b0508');
+      }
 
       // stat bars
       const rows = [...Object.keys(SUBJ).map(k=>[SUBJ[k], c.stats[k]]), ['Safety', c.safety]];
@@ -2178,8 +2482,12 @@ const S_select = {
     panel(x0, 532, W - x0*2, 104, 'rgba(6,24,36,.94)', c.suit);
     g.save(); g.globalAlpha = this.pop;
     txt(c.blurb, W/2, 562, 18, '#cfe6f2','center',400);
-    const isWrong = c.stats[Object.keys(c.stats).find(k=>c.stats[k]===0)] === 0;
-    txt(isWrong ? c.wrongLine : c.rightLine, W/2, 602, 21, '#f5d78a','center',400);
+    const hasWeak = Object.keys(c.stats).some(k=>c.stats[k]===0);
+    txt(hasWeak ? c.wrongLine : c.rightLine, W/2, 602, 21, '#f5d78a','center',400);
+    if (c.hard){
+      txt('no hints  ·  no guide markings  ·  Bassam will be watching you',
+          W/2, 646, 15, '#f0a0ac','center',400);
+    }
     g.restore();
 
     txt('click a card to begin', W/2, H-22, 14, 'rgba(234,244,250,.35)','center',400);
@@ -2237,11 +2545,29 @@ const S_intro = {
     /* boss stands behind the desk */
     const talkingBoss = this.convo && this.convo.speaking('Mr. Tarek');
     drawPerson(NPCS.boss, this.bossX, H*0.66+96, 2.9, {
-      dir:'right', face: talkingBoss ? 'neutral' : 'happy', talk: talkingBoss, seed:2,
-      armF: talkingBoss ? Math.PI - 0.9 - Math.sin(T/9)*0.35 : undefined,
-      armFBend: talkingBoss ? 0.8 : undefined
+      dir:'right',
+      face: isHard() ? (talkingBoss ? 'worry' : 'shame') : (talkingBoss ? 'neutral' : 'happy'),
+      talk: talkingBoss, seed:2,
+      pose: talkingBoss ? 'talk' : 'idle'
     });
     txt(NPCS.boss.name, this.bossX, H*0.66+124, 14, 'rgba(234,244,250,.5)');
+
+    /* in hard mode Bassam is already in the room, filing something, listening */
+    if (isHard()){
+      const sx = 1010;
+      const heard = this.convo && this.convo.i >= 2;
+      drawPerson(NPCS.sus, sx, H*0.66+96, 2.6, {
+        dir:'left', seed:23,
+        face: heard ? 'angry' : 'neutral',
+        pose: heard ? 'cross' : 'clipboard'
+      });
+      txt(NPCS.sus.name, sx, H*0.66+124, 14, 'rgba(234,244,250,.5)');
+      if (heard){
+        const marks = ['?', '?!', '...'];
+        txt(marks[Math.floor(T/40) % 3], sx + 34, H*0.66-92 + Math.sin(T/16)*4,
+            26, '#ee5f6e');
+      }
+    }
 
     /* hero walks in from the right */
     if (this.walking){
@@ -2249,29 +2575,42 @@ const S_intro = {
       if (T % 22 < dt) SFX.step();
       if (this.heroX <= 700){
         this.walking = false;
-        this.convo = Convo([
-          { by:'Mr. Tarek', text:'You must be the new graduate. Good. Badge on.',
-            at:()=>[this.bossX, H*0.66-52] },
-          { by:'Mr. Tarek', text:'Four stations need covering today, and the break room needs someone in it eventually.',
-            at:()=>[this.bossX, H*0.66-52] },
-          { by:'Mr. Tarek', text:'Do the work. Read the process. Do not burn my refinery down.',
-            at:()=>[this.bossX, H*0.66-52] },
+        const B = ()=>[this.bossX, H*0.66-52];
+        const Hh = ()=>[this.heroX, H*0.66-52];
+        const lines = isHard() ? [
+          /* the nepotism briefing */
+          { by:'Mr. Tarek', text:'Jojo. Your mother called me. Twice.', at:B },
+          { by:hero.name,   text:'Uncle! This is a lovely factory. Very... piped.', at:Hh, w:340 },
+          { by:'Mr. Tarek', text:'It is a refinery. Do not call me uncle on the floor.', at:B },
+          { by:hero.name,   text:'Understood. So what does a chemical engineer actually do all day?', at:Hh, w:380 },
+          { by:'Mr. Tarek', text:'...You start at the separation lab. Please touch as little as possible.', at:B, w:380 },
+          { by:hero.name,   text:'Relax. I have watched a documentary about oil.', at:Hh, w:340 },
+          { by:NPCS.sus.name, text:'Sir. Sorry. Which university was that, exactly?',
+            at:()=>[1010, H*0.66-52], w:330 },
+          { by:'Mr. Tarek', text:'Bassam. Go and check something. Anything.', at:B, w:320 },
+          { by:NPCS.sus.name, text:'Of course, sir. I will check on him.',
+            at:()=>[1010, H*0.66-52], w:300 }
+        ] : [
+          { by:'Mr. Tarek', text:'You must be the new graduate. Good. Badge on.', at:B },
+          { by:'Mr. Tarek', text:'Four stations need covering today, and the break room needs someone in it eventually.', at:B },
+          { by:'Mr. Tarek', text:'Do the work. Read the process. Do not burn my refinery down.', at:B },
           { by:hero.name, text: hero.safety===2
               ? 'Understood. Goggles first, questions later.'
               : hero.safety===0 ? 'Understood. Mostly understood.'
-              : 'Understood, sir.',
-            at:()=>[this.heroX, H*0.66-52] },
-          { by:'Mr. Tarek', text:'"Mostly" is how refineries end up in the news. Go.',
-            at:()=>[this.bossX, H*0.66-52] }
-        ], ()=> go(S_hub, 'fade'));
+              : 'Understood, sir.', at:Hh },
+          { by:'Mr. Tarek', text:'"Mostly" is how refineries end up in the news. Go.', at:B }
+        ];
+        this.convo = Convo(lines, ()=> go(S_hub, 'fade'));
       }
     }
     const talkingHero = this.convo && this.convo.speaking(hero.name);
     drawPerson(hero, this.heroX, H*0.66+96, 2.9, {
       dir:'left', walk: this.walking ? T*2.2 : 0,
-      face: talkingHero ? 'neutral' : this.walking ? 'neutral' : 'worry',
+      face: isHard() ? 'happy'
+          : talkingHero ? 'neutral' : this.walking ? 'neutral' : 'worry',
       talk: talkingHero, seed:5,
-      ppe:{ hat:true, goggles: hero.safety===2 }
+      pose: isHard() && !this.walking ? 'wave' : undefined,
+      ppe:{ hat: !isHard(), goggles: hero.safety===2 }
     });
 
     vignette(.35);
@@ -2352,6 +2691,8 @@ const S_hub = {
     Music.play('work');
     if (this.px === undefined){ this.px = W/2; this.py = 610; }
     this.face = 'right'; this.walkT = 0; this.stepT = 0; this.nearS = null;
+    if (this.susX === undefined) this.susX = this.px - 180;
+    this.susWalk = 0; this.susBubble = 0;
   },
   allDone(){ return STATIONS.every(s => G.done[s.key]); },
 
@@ -2543,6 +2884,30 @@ const S_hub = {
       }
     }
 
+    /* ================= Bassam, keeping his distance ================= */
+    if (isHard()){
+      const want = this.px + (this.px > W/2 ? -190 : 190);
+      const d = want - this.susX;
+      if (Math.abs(d) > 6){
+        this.susX += clamp(d * 0.028 * dt, -3.2, 3.2);
+        this.susWalk += dt * 2.0;
+      } else this.susWalk = 0;
+      drawPerson(NPCS.sus, this.susX, this.py + 14, 1.95, {
+        dir: this.px > this.susX ? 'right' : 'left',
+        walk: this.susWalk, seed:23,
+        face:'angry', pose: this.susWalk ? undefined : 'cross'
+      });
+      this.susBubble -= dt;
+      if (this.susBubble < -420){ this.susBubble = 150; }
+      if (this.susBubble > 0){
+        const lines = ['Which university, he said. He never answered.',
+                       'I am not following you. We are simply walking the same way.',
+                       'Four stations. I will be at every door.'];
+        bubble(lines[Math.floor(T/900) % 3], this.susX, this.py - 190,
+               { w:260, size:15, pop:1 });
+      }
+    }
+
     drawParts();
 
     /* ================= the player ================= */
@@ -2566,9 +2931,10 @@ const S_hub = {
     vignette(.36);
 
     const left = STATIONS.filter(s=>!G.done[s.key]).length;
-    hudEl.textContent = all
+    hudEl.textContent = (all
       ? 'All stations complete  —  report to Mr. Tarek'
-      : `${hero.name}   ·   stations left ${left}   ·   score ${finalScore()}/100`;
+      : `${hero.name}   ·   stations left ${left}   ·   score ${finalScore()}/100`)
+      + (isHard() ? '   ·   HARD MODE' : '');
   }
 };
 
@@ -2922,7 +3288,7 @@ const S_sep = {
     this.ppeMsg = null; this.ppeMsgT = 0; this.ppeAnim = 0;
     this.convo = null; this.reactT = 0;
     this.scored = false;
-    this.mutter = MUTTER.sep[skill('sep')]; this.mutterT = 210;
+    this.mutter = mutterFor('sep'); this.mutterT = 210;
     after(60, ()=>{ this.mode = 'free'; });
   },
   exit(){
@@ -3156,17 +3522,19 @@ const S_sep = {
 
     /* ================= the engineer ================= */
     const talking = this.convo && !this.convo.done;
-    let face = 'neutral', sweat = 0, armF, tilt = 0, lift = 0;
+    let face = 'neutral', sweat = 0, pose, tilt = 0, lift = 0;
     if (this.mode==='bay' && this.phase==='react'){
-      if (this.ok){ face = 'proud'; armF = -2.2 + Math.sin(T/7)*0.25; }
-      else { face = 'shock'; sweat = 2; armF = -1.0; }
+      if (this.ok){ face = 'proud'; pose = 'cheer'; }
+      else { face = 'shock'; sweat = 2; pose = 'panic'; }
       lift = this.ok ? -Math.abs(Math.sin(T/9))*9 : 0;
       tilt = this.ok ? 0 : Math.sin(T/6)*0.05;
     } else if (this.mode==='bay' && this.phase==='build'){
-      face = 'happy'; armF = -1.5 + Math.sin(T/5)*0.6;
-    } else if (this.ppeAnim > 0){ face = 'happy'; armF = -2.4; }
+      face = 'happy'; pose = 'work';
+    } else if (this.mode==='bay' && this.phase==='inspect'){
+      face = 'neutral'; pose = 'think';
+    } else if (this.ppeAnim > 0){ face = 'happy'; pose = 'wave'; }
     drawPerson(hero, this.px, this.py, 2.0, {
-      dir:this.face, walk:this.walkT, face, sweat, armF, tilt, lift, seed:5,
+      dir:this.face, walk:this.walkT, face, sweat, pose, tilt, lift, seed:5,
       talk: talking, ppe:{ hat:true, goggles:G.ppe.goggles, coat:G.ppe.coat }
     });
     if (this.ppeAnim > 0){
@@ -3588,7 +3956,7 @@ const S_rea = {
     this.solved = [false,false,false];
     this.pts = 0; this.safePts = 0;
     this.convo = null; this.scored = false;
-    this.mutter = MUTTER.rea[skill('rea')]; this.mutterT = 210;
+    this.mutter = mutterFor('rea'); this.mutterT = 210;
     after(60, ()=>{ this.mode='free'; });
   },
   exit(){
@@ -3689,8 +4057,7 @@ const S_rea = {
         dir: this.px > c.x ? 'right' : 'left',
         face: solved ? 'happy' : active ? 'neutral' : 'worry',
         talk: talking, seed: i*7,
-        armF: talking ? -0.8 - Math.sin(T/8)*0.5 : undefined,
-        armFBend: talking ? 0.9 : undefined
+        pose: talking ? 'talk' : (solved ? 'cheer' : 'idle')
       });
       if (!solved && !active){
         const bob = Math.sin(T/18 + i)*3;
@@ -3704,13 +4071,13 @@ const S_rea = {
 
     /* ---- the engineer ---- */
     const heroTalk = this.convo && this.convo.speaking(hero.name);
-    let face='neutral', armF, sweat=0;
+    let face='neutral', pose, sweat=0;
     if (this.phase==='verdict'){
-      if (this.result && this.result.perfect){ face='proud'; armF=-2.2; }
-      else { face='worry'; sweat=1; }
-    }
+      if (this.result && this.result.perfect){ face='proud'; pose='cheer'; }
+      else { face='worry'; sweat=1; pose='slump'; }
+    } else if (this.phase==='phone'){ pose='hold'; }
     drawPerson(hero, this.px, this.py, 2.0, {
-      dir:this.face, walk:this.walkT, face, armF, sweat, seed:5, talk:heroTalk,
+      dir:this.face, walk:this.walkT, face, pose, sweat, seed:5, talk:heroTalk,
       ppe:{ hat:true, goggles:G.ppe.goggles, coat:G.ppe.coat }
     });
 
@@ -4170,7 +4537,7 @@ const S_flu = {
     }));
     this.pts=0; this.safePts=0; this.scored=false;
     this.convo=null; this.fadiSaid=false; this.note=null; this.noteT=0;
-    this.mutter = MUTTER.flu[skill('flu')]; this.mutterT=210;
+    this.mutter = mutterFor('flu'); this.mutterT=210;
     after(60, ()=>{ this.mode='free'; });
   },
   exit(){
@@ -4262,7 +4629,7 @@ const S_flu = {
       dir: this.px > fx ? 'right' : 'left',
       face: anxious ? 'worry' : 'happy', seed:3,
       sweat: anxious ? 1 : 0,
-      armF: anxious ? -1.1 + Math.sin(T/13)*0.3 : undefined, armFBend: anxious ? 1.1 : undefined
+      pose: anxious ? 'shrug' : 'cheer'
     });
     txt(NPCS.operator.name, fx, 638, 13, 'rgba(234,244,250,.55)');
     if (anxious && !this.fadiSaid){
@@ -4745,7 +5112,7 @@ const S_hea = {
     this.trim = 0.2; this.trimDone = false;
     this.pts = 0; this.safePts = 0; this.scored = false;
     this.note = null; this.noteT = 0;
-    this.mutter = MUTTER.hea[skill('hea')]; this.mutterT = 210;
+    this.mutter = mutterFor('hea'); this.mutterT = 210;
     after(60, ()=>{ this.mode='free'; });
   },
   exit(){
@@ -5221,7 +5588,7 @@ const S_brk = {
       dir: this.px < dinaX ? 'left' : 'right',
       face: this.mode==='wake' ? 'shock' : 'happy',
       talk: dinaTalk, seed:9,
-      armF: dinaTalk ? -0.7 - Math.sin(T/9)*0.35 : undefined, armFBend: dinaTalk ? 0.9 : undefined
+      pose: dinaTalk ? 'talk' : 'idle'
     });
     txt(NPCS.colleague.name, dinaX, 596, 13, 'rgba(234,244,250,.5)');
 
@@ -5232,13 +5599,13 @@ const S_brk = {
                  ppe:{ hat:false, goggles:false, coat:G.ppe.coat } };
     if (this.mode === 'sleep'){
       hopt = Object.assign(hopt, { dir:'right', walk:0, face:'sleep',
-        lift:-38, headTilt:0.42, armF:0.1, armB:-0.1, squash:0.96 });
+        lift:-38, headTilt:0.42, pose:'slump', squash:0.96 });
       this.zT += dt;
       if (this.zT > 34){ this.zT = 0; emitZ(this.px+26, this.py-168); }
     } else if (this.mode === 'wake'){
       hopt = Object.assign(hopt, { dir:'right', walk:0,
         face: this.gaspT>0 ? 'panic' : 'worry', lift:-38,
-        sweat: this.gaspT>0 ? 3 : 1, armF:-1.3, armB:-1.1 });
+        sweat: this.gaspT>0 ? 3 : 1, pose:'panic' });
       if (this.gaspT>0) this.gaspT -= dt;
     } else if (this.mode === 'chat'){
       hopt.face = 'happy';
@@ -5489,9 +5856,7 @@ const S_dream = {
     drawPerson(NPCS.prof, 300, 560, 2.15, {
       dir:'right', face: angry ? 'angry' : profTalk ? 'angry' : 'neutral',
       talk: profTalk, seed:2,
-      armF: angry ? -2.5 + Math.sin(T/4)*0.3
-          : profTalk ? -1.2 - Math.sin(T/8)*0.5 : undefined,
-      armFBend: (angry||profTalk) ? 0.7 : undefined,
+      pose: (this.phase==='stamp') ? 'grab' : angry ? 'point' : profTalk ? 'talk' : 'idle',
       holdDraw: (this.phase==='stamp') ? (c)=>{
         c.save(); c.rotate(-0.4);
         c.fillStyle='#3b2a20'; rr(-7,-16,14,16,3); c.fill();
@@ -5514,7 +5879,7 @@ const S_dream = {
       const k = easeIn(this.fallK);
       drawPerson(hero, this.boardX + 40*k, 560 + 4*k, 2.0, {
         dir:'left', face:'dead', tilt: -k*Math.PI/2*0.92, lift: -6*Math.sin(k*Math.PI),
-        armF: -1.9, armB: 1.6, seed:5 });
+        pose: 'panic', seed:5 });
       // the F stamped on the forehead, riding along
       g.save();
       g.translate(this.boardX + 40*k, 560 + 4*k);
@@ -5543,7 +5908,7 @@ const S_dream = {
         dir: this.walking ? 'left' : 'right',
         walk: this.walking ? T*2.2 : 0,
         face: hf, sweat: stress, seed:5,
-        armF: this.phase==='quiz' ? -0.35 + Math.sin(T/6)*0.12 : undefined,
+        pose: this.phase==='quiz' ? 'think' : this.phase==='stamp' ? 'panic' : undefined,
         tilt: this.phase==='stamp' ? Math.sin(T/3)*0.04 : 0
       });
       if (this.phase==='stamp'){
@@ -5744,18 +6109,17 @@ const S_end = {
     /* ---------------- the boss ---------------- */
     const bossTalk = this.convo && !this.convo.done;
     const fired = this.v.k === 'fired';
-    let bArmF, bFace = 'neutral';
+    let bPose, bFace = 'neutral';
     if (this.phase === 'act' || this.phase === 'done'){
-      if (fired) { bFace = 'angry'; bArmF = -1.5 - Math.sin(this.actK/6)*0.5; }
-      else if (this.v.k === 'badge' || this.v.k === 'employee'){ bFace='happy'; bArmF = -1.9; }
-      else { bFace='happy'; bArmF = -1.2; }
+      if (fired) { bFace = 'angry'; bPose = 'point'; }
+      else if (this.v.k === 'badge'){ bFace='happy'; bPose = 'present'; }
+      else if (this.v.k === 'employee'){ bFace='happy'; bPose = 'cheer'; }
+      else { bFace='happy'; bPose = 'present'; }
     } else if (bossTalk) bFace = fired ? 'angry' : 'neutral';
 
     drawPerson(NPCS.boss, this.bossX, H*0.66+96, 2.6, {
       dir:'right', face:bFace, talk:bossTalk, seed:2,
-      armF: bArmF !== undefined ? bArmF : (bossTalk ? -0.9 - Math.sin(T/9)*0.35 : undefined),
-      armFBend: (bArmF !== undefined || bossTalk) ? 0.8 : undefined
-      // his badge disappears once he hands it over
+      pose: bPose || (bossTalk ? 'talk' : 'idle')
     });
     if (this.v.k === 'badge' && this.badgeK > 0.35){
       // paint over his chest badge so it reads as given away
@@ -5766,14 +6130,14 @@ const S_end = {
 
     /* ---------------- the graduate ---------------- */
     const heroTalk = this.convo && this.convo.speaking(hero.name);
-    let hFace = 'neutral', hArmF, hLift = 0, hTilt = 0;
+    let hFace = 'neutral', hPose, hLift = 0, hTilt = 0;
     if (this.phase === 'act' || this.phase === 'done'){
       if (this.v.k === 'badge' || this.v.k === 'employee'){
-        hFace = 'proud'; hArmF = -2.3 + Math.sin(this.actK/7)*0.2;
+        hFace = 'proud'; hPose = 'cheer';
         hLift = -Math.abs(Math.sin(this.actK/9))*12;
-      } else if (this.v.k === 'hired'){ hFace='happy'; hArmF = -1.5; }
-      else if (this.v.k === 'training'){ hFace='worry'; hArmF = -1.1; }
-      else { hFace='shock'; }
+      } else if (this.v.k === 'hired'){ hFace='happy'; hPose='reach'; }
+      else if (this.v.k === 'training'){ hFace='worry'; hPose='hold'; }
+      else { hFace='shock'; hPose='panic'; }
     }
 
     if ((this.phase === 'act' || this.phase === 'done') && fired && this.actK > 60){
@@ -5782,14 +6146,14 @@ const S_end = {
       const x = lerp(this.heroX, W + 220, easeIn(k));
       const y = lerp(H*0.66+96, H*0.30, Math.sin(k*Math.PI)) ;
       drawPerson(hero, x, y, 2.6, { dir:'right', face:'dead', seed:5,
-        tilt: k*12, armF:-2.2, armB:2.2, shadow:false });
+        tilt: k*12, pose:'panic', shadow:false });
       if (Math.random()<.7) spawn({ x:x-40, y:y+10, vx:rnd(-3,-1), vy:rnd(-1,1),
         life:rnd(24,44), max:44, size:rnd(8,18), col:'rgba(220,226,214,.45)', kind:'puff' });
       if (k > 0.98 && !this.kicked){ this.kicked = true; after(40, ()=> this.phase='done'); }
     } else {
       drawPerson(hero, this.heroX, H*0.66+96, 2.6, {
         dir:'left', walk: this.phase==='walk' ? T*2.2 : 0,
-        face:hFace, talk:heroTalk, armF:hArmF, lift:hLift, tilt:hTilt, seed:5,
+        face:hFace, talk:heroTalk, pose:hPose, lift:hLift, tilt:hTilt, seed:5,
         ppe:{ hat:true, goggles:G.ppe.goggles, coat:G.ppe.coat }
       });
     }

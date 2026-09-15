@@ -64,18 +64,17 @@ const S_end = {
     /* ---------------- the boss ---------------- */
     const bossTalk = this.convo && !this.convo.done;
     const fired = this.v.k === 'fired';
-    let bArmF, bFace = 'neutral';
+    let bPose, bFace = 'neutral';
     if (this.phase === 'act' || this.phase === 'done'){
-      if (fired) { bFace = 'angry'; bArmF = -1.5 - Math.sin(this.actK/6)*0.5; }
-      else if (this.v.k === 'badge' || this.v.k === 'employee'){ bFace='happy'; bArmF = -1.9; }
-      else { bFace='happy'; bArmF = -1.2; }
+      if (fired) { bFace = 'angry'; bPose = 'point'; }
+      else if (this.v.k === 'badge'){ bFace='happy'; bPose = 'present'; }
+      else if (this.v.k === 'employee'){ bFace='happy'; bPose = 'cheer'; }
+      else { bFace='happy'; bPose = 'present'; }
     } else if (bossTalk) bFace = fired ? 'angry' : 'neutral';
 
     drawPerson(NPCS.boss, this.bossX, H*0.66+96, 2.6, {
       dir:'right', face:bFace, talk:bossTalk, seed:2,
-      armF: bArmF !== undefined ? bArmF : (bossTalk ? -0.9 - Math.sin(T/9)*0.35 : undefined),
-      armFBend: (bArmF !== undefined || bossTalk) ? 0.8 : undefined
-      // his badge disappears once he hands it over
+      pose: bPose || (bossTalk ? 'talk' : 'idle')
     });
     if (this.v.k === 'badge' && this.badgeK > 0.35){
       // paint over his chest badge so it reads as given away
@@ -86,14 +85,14 @@ const S_end = {
 
     /* ---------------- the graduate ---------------- */
     const heroTalk = this.convo && this.convo.speaking(hero.name);
-    let hFace = 'neutral', hArmF, hLift = 0, hTilt = 0;
+    let hFace = 'neutral', hPose, hLift = 0, hTilt = 0;
     if (this.phase === 'act' || this.phase === 'done'){
       if (this.v.k === 'badge' || this.v.k === 'employee'){
-        hFace = 'proud'; hArmF = -2.3 + Math.sin(this.actK/7)*0.2;
+        hFace = 'proud'; hPose = 'cheer';
         hLift = -Math.abs(Math.sin(this.actK/9))*12;
-      } else if (this.v.k === 'hired'){ hFace='happy'; hArmF = -1.5; }
-      else if (this.v.k === 'training'){ hFace='worry'; hArmF = -1.1; }
-      else { hFace='shock'; }
+      } else if (this.v.k === 'hired'){ hFace='happy'; hPose='reach'; }
+      else if (this.v.k === 'training'){ hFace='worry'; hPose='hold'; }
+      else { hFace='shock'; hPose='panic'; }
     }
 
     if ((this.phase === 'act' || this.phase === 'done') && fired && this.actK > 60){
@@ -102,14 +101,14 @@ const S_end = {
       const x = lerp(this.heroX, W + 220, easeIn(k));
       const y = lerp(H*0.66+96, H*0.30, Math.sin(k*Math.PI)) ;
       drawPerson(hero, x, y, 2.6, { dir:'right', face:'dead', seed:5,
-        tilt: k*12, armF:-2.2, armB:2.2, shadow:false });
+        tilt: k*12, pose:'panic', shadow:false });
       if (Math.random()<.7) spawn({ x:x-40, y:y+10, vx:rnd(-3,-1), vy:rnd(-1,1),
         life:rnd(24,44), max:44, size:rnd(8,18), col:'rgba(220,226,214,.45)', kind:'puff' });
       if (k > 0.98 && !this.kicked){ this.kicked = true; after(40, ()=> this.phase='done'); }
     } else {
       drawPerson(hero, this.heroX, H*0.66+96, 2.6, {
         dir:'left', walk: this.phase==='walk' ? T*2.2 : 0,
-        face:hFace, talk:heroTalk, armF:hArmF, lift:hLift, tilt:hTilt, seed:5,
+        face:hFace, talk:heroTalk, pose:hPose, lift:hLift, tilt:hTilt, seed:5,
         ppe:{ hat:true, goggles:G.ppe.goggles, coat:G.ppe.coat }
       });
     }

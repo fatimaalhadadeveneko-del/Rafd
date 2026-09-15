@@ -246,6 +246,13 @@ const S_select = {
 
       txt(c.name, x+cw/2, yy+226, 21, on ? '#fff' : '#cfe6f2');
       txt(c.title, x+cw/2, yy+250, 15, c.suit, 'center', 700);
+      if (c.hard){
+        const hw = 116, hx = x+cw/2-hw/2, hy2 = yy+12;
+        g.save();
+        g.fillStyle = `rgba(238,95,110,${on ? .95 : .7})`;
+        g.rotate(0); rr(hx, hy2, hw, 22, 6); g.fill(); g.restore();
+        txt('HARD MODE', x+cw/2, hy2+11, 13, '#1b0508');
+      }
 
       // stat bars
       const rows = [...Object.keys(SUBJ).map(k=>[SUBJ[k], c.stats[k]]), ['Safety', c.safety]];
@@ -268,8 +275,12 @@ const S_select = {
     panel(x0, 532, W - x0*2, 104, 'rgba(6,24,36,.94)', c.suit);
     g.save(); g.globalAlpha = this.pop;
     txt(c.blurb, W/2, 562, 18, '#cfe6f2','center',400);
-    const isWrong = c.stats[Object.keys(c.stats).find(k=>c.stats[k]===0)] === 0;
-    txt(isWrong ? c.wrongLine : c.rightLine, W/2, 602, 21, '#f5d78a','center',400);
+    const hasWeak = Object.keys(c.stats).some(k=>c.stats[k]===0);
+    txt(hasWeak ? c.wrongLine : c.rightLine, W/2, 602, 21, '#f5d78a','center',400);
+    if (c.hard){
+      txt('no hints  ·  no guide markings  ·  Bassam will be watching you',
+          W/2, 646, 15, '#f0a0ac','center',400);
+    }
     g.restore();
 
     txt('click a card to begin', W/2, H-22, 14, 'rgba(234,244,250,.35)','center',400);
@@ -327,11 +338,29 @@ const S_intro = {
     /* boss stands behind the desk */
     const talkingBoss = this.convo && this.convo.speaking('Mr. Tarek');
     drawPerson(NPCS.boss, this.bossX, H*0.66+96, 2.9, {
-      dir:'right', face: talkingBoss ? 'neutral' : 'happy', talk: talkingBoss, seed:2,
-      armF: talkingBoss ? Math.PI - 0.9 - Math.sin(T/9)*0.35 : undefined,
-      armFBend: talkingBoss ? 0.8 : undefined
+      dir:'right',
+      face: isHard() ? (talkingBoss ? 'worry' : 'shame') : (talkingBoss ? 'neutral' : 'happy'),
+      talk: talkingBoss, seed:2,
+      pose: talkingBoss ? 'talk' : 'idle'
     });
     txt(NPCS.boss.name, this.bossX, H*0.66+124, 14, 'rgba(234,244,250,.5)');
+
+    /* in hard mode Bassam is already in the room, filing something, listening */
+    if (isHard()){
+      const sx = 1010;
+      const heard = this.convo && this.convo.i >= 2;
+      drawPerson(NPCS.sus, sx, H*0.66+96, 2.6, {
+        dir:'left', seed:23,
+        face: heard ? 'angry' : 'neutral',
+        pose: heard ? 'cross' : 'clipboard'
+      });
+      txt(NPCS.sus.name, sx, H*0.66+124, 14, 'rgba(234,244,250,.5)');
+      if (heard){
+        const marks = ['?', '?!', '...'];
+        txt(marks[Math.floor(T/40) % 3], sx + 34, H*0.66-92 + Math.sin(T/16)*4,
+            26, '#ee5f6e');
+      }
+    }
 
     /* hero walks in from the right */
     if (this.walking){
@@ -339,29 +368,42 @@ const S_intro = {
       if (T % 22 < dt) SFX.step();
       if (this.heroX <= 700){
         this.walking = false;
-        this.convo = Convo([
-          { by:'Mr. Tarek', text:'You must be the new graduate. Good. Badge on.',
-            at:()=>[this.bossX, H*0.66-52] },
-          { by:'Mr. Tarek', text:'Four stations need covering today, and the break room needs someone in it eventually.',
-            at:()=>[this.bossX, H*0.66-52] },
-          { by:'Mr. Tarek', text:'Do the work. Read the process. Do not burn my refinery down.',
-            at:()=>[this.bossX, H*0.66-52] },
+        const B = ()=>[this.bossX, H*0.66-52];
+        const Hh = ()=>[this.heroX, H*0.66-52];
+        const lines = isHard() ? [
+          /* the nepotism briefing */
+          { by:'Mr. Tarek', text:'Jojo. Your mother called me. Twice.', at:B },
+          { by:hero.name,   text:'Uncle! This is a lovely factory. Very... piped.', at:Hh, w:340 },
+          { by:'Mr. Tarek', text:'It is a refinery. Do not call me uncle on the floor.', at:B },
+          { by:hero.name,   text:'Understood. So what does a chemical engineer actually do all day?', at:Hh, w:380 },
+          { by:'Mr. Tarek', text:'...You start at the separation lab. Please touch as little as possible.', at:B, w:380 },
+          { by:hero.name,   text:'Relax. I have watched a documentary about oil.', at:Hh, w:340 },
+          { by:NPCS.sus.name, text:'Sir. Sorry. Which university was that, exactly?',
+            at:()=>[1010, H*0.66-52], w:330 },
+          { by:'Mr. Tarek', text:'Bassam. Go and check something. Anything.', at:B, w:320 },
+          { by:NPCS.sus.name, text:'Of course, sir. I will check on him.',
+            at:()=>[1010, H*0.66-52], w:300 }
+        ] : [
+          { by:'Mr. Tarek', text:'You must be the new graduate. Good. Badge on.', at:B },
+          { by:'Mr. Tarek', text:'Four stations need covering today, and the break room needs someone in it eventually.', at:B },
+          { by:'Mr. Tarek', text:'Do the work. Read the process. Do not burn my refinery down.', at:B },
           { by:hero.name, text: hero.safety===2
               ? 'Understood. Goggles first, questions later.'
               : hero.safety===0 ? 'Understood. Mostly understood.'
-              : 'Understood, sir.',
-            at:()=>[this.heroX, H*0.66-52] },
-          { by:'Mr. Tarek', text:'"Mostly" is how refineries end up in the news. Go.',
-            at:()=>[this.bossX, H*0.66-52] }
-        ], ()=> go(S_hub, 'fade'));
+              : 'Understood, sir.', at:Hh },
+          { by:'Mr. Tarek', text:'"Mostly" is how refineries end up in the news. Go.', at:B }
+        ];
+        this.convo = Convo(lines, ()=> go(S_hub, 'fade'));
       }
     }
     const talkingHero = this.convo && this.convo.speaking(hero.name);
     drawPerson(hero, this.heroX, H*0.66+96, 2.9, {
       dir:'left', walk: this.walking ? T*2.2 : 0,
-      face: talkingHero ? 'neutral' : this.walking ? 'neutral' : 'worry',
+      face: isHard() ? 'happy'
+          : talkingHero ? 'neutral' : this.walking ? 'neutral' : 'worry',
       talk: talkingHero, seed:5,
-      ppe:{ hat:true, goggles: hero.safety===2 }
+      pose: isHard() && !this.walking ? 'wave' : undefined,
+      ppe:{ hat: !isHard(), goggles: hero.safety===2 }
     });
 
     vignette(.35);

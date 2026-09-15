@@ -205,7 +205,7 @@ const S_rea = {
     this.solved = [false,false,false];
     this.pts = 0; this.safePts = 0;
     this.convo = null; this.scored = false;
-    this.mutter = MUTTER.rea[skill('rea')]; this.mutterT = 210;
+    this.mutter = mutterFor('rea'); this.mutterT = 210;
     after(60, ()=>{ this.mode='free'; });
   },
   exit(){
@@ -306,8 +306,7 @@ const S_rea = {
         dir: this.px > c.x ? 'right' : 'left',
         face: solved ? 'happy' : active ? 'neutral' : 'worry',
         talk: talking, seed: i*7,
-        armF: talking ? -0.8 - Math.sin(T/8)*0.5 : undefined,
-        armFBend: talking ? 0.9 : undefined
+        pose: talking ? 'talk' : (solved ? 'cheer' : 'idle')
       });
       if (!solved && !active){
         const bob = Math.sin(T/18 + i)*3;
@@ -321,13 +320,13 @@ const S_rea = {
 
     /* ---- the engineer ---- */
     const heroTalk = this.convo && this.convo.speaking(hero.name);
-    let face='neutral', armF, sweat=0;
+    let face='neutral', pose, sweat=0;
     if (this.phase==='verdict'){
-      if (this.result && this.result.perfect){ face='proud'; armF=-2.2; }
-      else { face='worry'; sweat=1; }
-    }
+      if (this.result && this.result.perfect){ face='proud'; pose='cheer'; }
+      else { face='worry'; sweat=1; pose='slump'; }
+    } else if (this.phase==='phone'){ pose='hold'; }
     drawPerson(hero, this.px, this.py, 2.0, {
-      dir:this.face, walk:this.walkT, face, armF, sweat, seed:5, talk:heroTalk,
+      dir:this.face, walk:this.walkT, face, pose, sweat, seed:5, talk:heroTalk,
       ppe:{ hat:true, goggles:G.ppe.goggles, coat:G.ppe.coat }
     });
 

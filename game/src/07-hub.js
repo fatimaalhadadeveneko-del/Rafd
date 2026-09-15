@@ -68,6 +68,8 @@ const S_hub = {
     Music.play('work');
     if (this.px === undefined){ this.px = W/2; this.py = 610; }
     this.face = 'right'; this.walkT = 0; this.stepT = 0; this.nearS = null;
+    if (this.susX === undefined) this.susX = this.px - 180;
+    this.susWalk = 0; this.susBubble = 0;
   },
   allDone(){ return STATIONS.every(s => G.done[s.key]); },
 
@@ -259,6 +261,30 @@ const S_hub = {
       }
     }
 
+    /* ================= Bassam, keeping his distance ================= */
+    if (isHard()){
+      const want = this.px + (this.px > W/2 ? -190 : 190);
+      const d = want - this.susX;
+      if (Math.abs(d) > 6){
+        this.susX += clamp(d * 0.028 * dt, -3.2, 3.2);
+        this.susWalk += dt * 2.0;
+      } else this.susWalk = 0;
+      drawPerson(NPCS.sus, this.susX, this.py + 14, 1.95, {
+        dir: this.px > this.susX ? 'right' : 'left',
+        walk: this.susWalk, seed:23,
+        face:'angry', pose: this.susWalk ? undefined : 'cross'
+      });
+      this.susBubble -= dt;
+      if (this.susBubble < -420){ this.susBubble = 150; }
+      if (this.susBubble > 0){
+        const lines = ['Which university, he said. He never answered.',
+                       'I am not following you. We are simply walking the same way.',
+                       'Four stations. I will be at every door.'];
+        bubble(lines[Math.floor(T/900) % 3], this.susX, this.py - 190,
+               { w:260, size:15, pop:1 });
+      }
+    }
+
     drawParts();
 
     /* ================= the player ================= */
@@ -282,8 +308,9 @@ const S_hub = {
     vignette(.36);
 
     const left = STATIONS.filter(s=>!G.done[s.key]).length;
-    hudEl.textContent = all
+    hudEl.textContent = (all
       ? 'All stations complete  —  report to Mr. Tarek'
-      : `${hero.name}   ·   stations left ${left}   ·   score ${finalScore()}/100`;
+      : `${hero.name}   ·   stations left ${left}   ·   score ${finalScore()}/100`)
+      + (isHard() ? '   ·   HARD MODE' : '');
   }
 };

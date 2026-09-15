@@ -169,7 +169,7 @@ const S_flu = {
     }));
     this.pts=0; this.safePts=0; this.scored=false;
     this.convo=null; this.fadiSaid=false; this.note=null; this.noteT=0;
-    this.mutter = MUTTER.flu[skill('flu')]; this.mutterT=210;
+    this.mutter = mutterFor('flu'); this.mutterT=210;
     after(60, ()=>{ this.mode='free'; });
   },
   exit(){
@@ -261,7 +261,7 @@ const S_flu = {
       dir: this.px > fx ? 'right' : 'left',
       face: anxious ? 'worry' : 'happy', seed:3,
       sweat: anxious ? 1 : 0,
-      armF: anxious ? -1.1 + Math.sin(T/13)*0.3 : undefined, armFBend: anxious ? 1.1 : undefined
+      pose: anxious ? 'shrug' : 'cheer'
     });
     txt(NPCS.operator.name, fx, 638, 13, 'rgba(234,244,250,.55)');
     if (anxious && !this.fadiSaid){

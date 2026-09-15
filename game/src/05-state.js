@@ -15,12 +15,17 @@ const G = {
   sheet: false,              // picked up the Reynolds cheat sheet
   hintUsed: {},              // per station
   blunders: 0,
+  quizDone: {},              // station key -> true, hard mode only
   reset(){
     for (const k in this.got){ this.got[k]=0; this.maxp[k]=0; }
     this.done = {}; this.ppe = {goggles:false,coat:false,hat:false}; this.ppeTries=0;
-    this.sheet=false; this.hintUsed={}; this.blunders=0;
+    this.sheet=false; this.hintUsed={}; this.blunders=0; this.quizDone={};
   }
 };
+
+/* Hard mode rides on the character you pick: the boss's cousin gets no hints,
+   no guide bands, misreads everything, and is followed around by Bassam. */
+function isHard(){ return !!hero.hard; }
 
 /* award(key, earned, possible) */
 function award(key, earned, possible){
@@ -46,8 +51,16 @@ function subjectPct(k){
    0 weak   : no help, and offers a confidently wrong opinion
 ------------------------------------------------- */
 function skill(k){ return hero.stats[k] === undefined ? 1 : hero.stats[k]; }
-function isStrong(k){ return skill(k) === 2; }
-function isWeak(k){ return skill(k) === 0; }
+function isStrong(k){ return skill(k) === 2 && !isHard(); }
+function isWeak(k){ return skill(k) === 0 || isHard(); }
+
+/* Guide rails — the green target bands, the ghost outlines and the coffee hint
+   are all crutches.  A weak engineer in that subject does not get them, and the
+   boss's cousin never gets them at all. */
+function showGuide(k){ return !isHard() && skill(k) > 0; }
+function ghostHelp(k){ return isStrong(k); }
+/* a shaky engineer has to look twice before the game will let them commit */
+function needsInspection(k){ return isHard() || skill(k) === 0; }
 
 /* what the engineer mutters when they look at a problem */
 const MUTTER = {
@@ -67,12 +80,23 @@ const MUTTER = {
          1:'Thermo. I remember most of it.',
          0:'Thermo. Please, not thermo.' }
 };
+/* the cousin has his own, worse, commentary */
+const HARD_MUTTER = {
+  sep:'Separation. So we separate it. I do not see the difficulty here.',
+  rea:'A reactor. Like a microwave, but industrial. I have used a microwave.',
+  flu:'Pipes. You point them where you want the stuff to go. Done.',
+  hea:'Heat transfer. You turn the dial until the number looks nicer.',
+  the:'Thermo. My uncle said I would not need this one.'
+};
+function mutterFor(k){ return isHard() ? HARD_MUTTER[k] : MUTTER[k][skill(k)]; }
 
 /* ---------------- coffee hint ---------------- */
 const Hint = {
   station:null, shown:0, text:'',
   begin(station){ this.station = station; this.shown = 0; this.text=''; },
-  available(){ return !G.hintUsed[this.station]; },
+  /* hard mode has no coffee, no hints, no mercy */
+  offered(){ return !isHard(); },
+  available(){ return !isHard() && !G.hintUsed[this.station]; },
   use(text){
     if (!this.available()) return false;
     G.hintUsed[this.station] = true;
@@ -82,6 +106,7 @@ const Hint = {
   },
   /* draw the coffee cup button + the thought bubble */
   draw(x, y, anchorX, anchorY){
+    if (!this.offered()) return false;
     if (this.shown > 0){
       this.shown -= dt;
       thought(this.text, anchorX, anchorY, { w:280, size:17, reveal:1e9 });
@@ -156,3 +181,155 @@ function Convo(lines, onDone, opt={}){
 
 /* helper: is this convo line from the hero? */
 function heroTalking(c){ return c && !c.done && c.line.by === hero.name; }
+
+/* ============================================================
+   Bassam's exit quiz — hard mode only.  He blocks the door of each
+   unit room and asks three true/false questions before letting you out.
+   ============================================================ */
+const TF_QUIZ = {
+  sep: [
+    { q:'Liquid holdup is the quantity of liquid contained in the packed bed.', a:true,
+      why:'That is exactly what holdup means: the liquid sitting inside the packing at any moment.' },
+    { q:'For equimolar counterdiffusion in a binary mixture, both components diffuse in the same direction.', a:false,
+      why:'Counterdiffusion means they pass each other going opposite ways, mole for mole.' },
+    { q:'Distillation can separate components of a liquid mixture based on differences in their volatility.', a:true,
+      why:'A difference in volatility is the entire basis of distillation.' }
+  ],
+  rea: [
+    { q:'For a given reaction, increasing reactant concentration will always increase the reaction rate, regardless of the form of the rate law.', a:false,
+      why:'Zero order in that reactant, or a catalyst already saturated, and the rate does not move at all.' },
+    { q:'Mass-transfer limitations can reduce the conversion achieved in a reactor.', a:true,
+      why:'If reactant cannot reach the active site fast enough, the observed rate falls and so does conversion.' },
+    { q:'For a first-order irreversible reaction, a CSTR generally achieves a higher conversion than a PFR of the same volume under identical feed conditions.', a:false,
+      why:'A CSTR sits at the low outlet concentration throughout, so it needs more volume. The PFR wins.' }
+  ],
+  flu: [
+    { q:'The Reynolds number represents the ratio of viscous forces to inertial forces.', a:false,
+      why:'The other way round. Inertial over viscous.' },
+    { q:'For flow through a pipe, the volumetric flow rate is equal to the fluid velocity divided by the cross-sectional area.', a:false,
+      why:'Q equals v times A. Multiplied, not divided.' },
+    { q:'The pressure drop due to friction in a pipe decreases as the pipe length increases.', a:false,
+      why:'Friction loss grows with length. A longer pipe costs you more pressure, not less.' }
+  ],
+  hea: [
+    { q:'In steady-state heat conduction, the temperature at every point in the system must be constant and equal.', a:false,
+      why:'Constant in time, yes. Equal everywhere, no. Without a gradient nothing would conduct at all.' },
+    { q:'The convection heat transfer coefficient, h, is a material property that depends only on the type of fluid.', a:false,
+      why:'h also depends on geometry, flow regime and velocity. It is not a property of the fluid alone.' },
+    { q:'Thermal radiation can transfer energy through a vacuum without requiring a material medium.', a:true,
+      why:'Radiation needs no medium whatsoever. That is how the sun reaches you.' }
+  ]
+};
+
+/* Bassam's opening jab per station, so he is not repeating himself */
+const SUS_INTRO = {
+  sep: 'Before you go. Three questions. Humour me.',
+  rea: 'Not so fast. I watched that. Three questions.',
+  flu: 'One moment. I want to check something about you.',
+  hea: 'Last one, I promise. Then I will leave you alone. Probably.'
+};
+const SUS_PASS = [
+  'Hm. Fine. Maybe somebody did teach you something.',
+  'Two out of three. I am revising my theory. Slightly.',
+  'All three. I genuinely did not expect that. Carry on.'
+];
+const SUS_FAIL = [
+  'None of them. Not one. I am writing this down.',
+  'That was painful to watch. Go. Just go.',
+  'I am going to have a word with your uncle.'
+];
+
+/* returns a drawable quiz; call draw() each frame, it calls onDone(correct) */
+function makeTFQuiz(key, onDone){
+  const qs = TF_QUIZ[key] || [];
+  return {
+    i:0, picked:null, fb:0, correct:0, pop:0, closing:0,
+    finished:false,
+    draw(){
+      /* the man himself, arms folded in the doorway */
+      shade(.72);
+      const bx = 250, by = 600;
+      drawPerson(NPCS.sus, bx, by, 2.5, {
+        dir:'right', seed:23,
+        face: this.fb > 0 ? (this.wasRight ? 'neutral' : 'angry') : 'neutral',
+        pose: this.fb > 0 ? 'point' : 'cross',
+        talk: this.fb <= 0 && this.pop < 1
+      });
+      txt(NPCS.sus.name, bx, by + 28, 15, '#9fd8ef');
+      txt('Process Safety. Allegedly.', bx, by + 48, 12, 'rgba(159,216,239,.55)','center',400);
+
+      if (this.finished){
+        this.closing -= dt;
+        const msg = this.correct === 3 ? SUS_PASS[2]
+                  : this.correct === 2 ? SUS_PASS[1]
+                  : this.correct === 1 ? SUS_PASS[0]
+                  : SUS_FAIL[0];
+        bubble(msg, bx + 40, by - 250, { w:360, size:18, pop:1 });
+        panel(W/2-220, H-118, 440, 60, 'rgba(4,18,28,.96)',
+              this.correct >= 2 ? '#3fd07f' : '#ee5f6e');
+        txt(this.correct + ' of 3 correct', W/2, H-88, 22,
+            this.correct >= 2 ? '#8fe8b8' : '#f0b0bc');
+        if (this.closing <= 0 && button('GO BACK TO WORK', W/2-130, H-48, 260, 40,
+                                        { col:'#3fd07f', size:16 })){
+          onDone(this.correct);
+        }
+        return;
+      }
+
+      const q = qs[this.i];
+      this.pop = Math.min(1, this.pop + dt/12);
+
+      txt('HARD MODE  ·  ' + (this.i+1) + ' of 3', W/2, 74, 15, '#f5b53d');
+      if (this.i === 0 && this.fb <= 0)
+        bubble(SUS_INTRO[key], bx + 40, by - 250, { w:320, size:17, pop:this.pop });
+
+      panel(W/2-400, 150, 800, 150, 'rgba(6,24,36,.97)', 'rgba(35,166,224,.6)');
+      wrapText(q.q, W/2, 210, 730, 30, 21, '#eaf4fa', 'center', 400);
+
+      const bw = 240, bh = 64, gap = 40;
+      [['TRUE', true], ['FALSE', false]].forEach(([lab, val], k)=>{
+        const bx2 = W/2 - bw - gap/2 + k*(bw+gap), by2 = 344;
+        const locked = this.fb > 0;
+        const chosen = locked && this.picked === val;
+        const isRight = val === q.a;
+        const z = zone(bx2, by2, bw, bh);
+        g.save();
+        if (z.hover && !locked){ g.shadowColor='#23a6e0'; g.shadowBlur=22; }
+        g.fillStyle = chosen ? (isRight ? 'rgba(16,70,48,.98)' : 'rgba(70,18,26,.98)')
+                    : locked && isRight ? 'rgba(16,70,48,.72)'
+                    : locked ? 'rgba(12,28,38,.7)'
+                    : z.hover ? 'rgba(16,58,80,.98)' : 'rgba(8,32,46,.95)';
+        rr(bx2, z.hover && !locked ? by2-3 : by2, bw, bh, 12); g.fill();
+        g.restore();
+        g.strokeStyle = chosen ? (isRight ? '#3fd07f' : '#ee5f6e')
+                      : locked && isRight ? '#3fd07f'
+                      : locked ? 'rgba(120,150,165,.3)'
+                      : z.hover ? '#23a6e0' : 'rgba(35,166,224,.4)';
+        g.lineWidth = chosen ? 3.4 : 2;
+        rr(bx2, z.hover && !locked ? by2-3 : by2, bw, bh, 12); g.stroke();
+        txt(lab, bx2+bw/2, (z.hover && !locked ? by2-3 : by2)+bh/2, 26,
+            locked && !chosen && !isRight ? 'rgba(200,220,232,.35)' : '#eaf4fa');
+        if (z.clicked && !locked) this.answer(val, q);
+      });
+
+      if (this.fb > 0){
+        this.fb -= dt;
+        panel(W/2-400, 442, 800, 118, this.wasRight ? 'rgba(8,40,28,.97)' : 'rgba(44,12,18,.97)',
+              this.wasRight ? '#3fd07f' : '#ee5f6e');
+        txt(this.wasRight ? 'CORRECT' : 'WRONG', W/2, 474, 24,
+            this.wasRight ? '#3fd07f' : '#ee5f6e');
+        wrapText(q.why, W/2, 514, 730, 24, 18, '#dceaf2', 'center', 400);
+        if (this.fb <= 0){
+          this.fb = 0; this.i++; this.picked = null; this.pop = 0;
+          if (this.i >= qs.length){ this.finished = true; this.closing = 40; SFX.click(); }
+        }
+      }
+    },
+    answer(val, q){
+      this.picked = val;
+      this.wasRight = (val === q.a);
+      if (this.wasRight){ this.correct++; SFX.good(); } else { SFX.bad(); }
+      this.fb = 150;
+    }
+  };
+}

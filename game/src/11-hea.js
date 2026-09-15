@@ -126,7 +126,7 @@ const S_hea = {
     this.trim = 0.2; this.trimDone = false;
     this.pts = 0; this.safePts = 0; this.scored = false;
     this.note = null; this.noteT = 0;
-    this.mutter = MUTTER.hea[skill('hea')]; this.mutterT = 210;
+    this.mutter = mutterFor('hea'); this.mutterT = 210;
     after(60, ()=>{ this.mode='free'; });
   },
   exit(){
