@@ -1,0 +1,123 @@
+# ChemEng Quest — First Day at the Refinery
+
+A short chemical-engineering video game for the AIChE student chapter booth.
+Everything runs in the browser with no server, no install and no internet:
+open the file and play.
+
+## The two builds
+
+| file | what it is |
+| --- | --- |
+| `ChemEngQuest.html` | **the game.** The animated build. This is the one to run at the booth. |
+| `ChemEngQuest-v1-reference.html` | the earlier, simpler build, kept untouched as a fallback |
+
+Double-click either file. Chrome or Edge is best. Press **F** for full screen.
+Click once when the title card appears so the browser lets the sound play.
+
+## Controls
+
+| key | what it does |
+| --- | --- |
+| arrow keys or WASD | walk |
+| space or enter | talk, continue, go through a door |
+| mouse | pick up, place and install equipment |
+| coffee cup | one hint per station |
+| F | full screen |
+
+## How a run goes
+
+1. The AIChE logo assembles, then the main menu.
+2. **Choose your engineer.** Four of them. Each is strong in some subjects and
+   weak in others, and it changes how the game plays, not just the score:
+   * **strong** — they spot the answer immediately and the right option is outlined for you
+   * **average** — no help up front, but they work it out after one wrong attempt
+   * **weak** — no help at all, and they confidently suggest the wrong thing
+   * **safety** — a careless engineer argues with the PPE locker three times before putting the goggles on
+3. Mr. Tarek gives you the morning.
+4. Five stations, in any order:
+   * **Separation Techniques Lab** — read five animated feed samples and install the right unit. Wrong units fail in their own way: salt cakes a column solid and splits a seam, a dryer sprays brine over everything, sugar in a reboiler caramelises then carbonises.
+   * **Reactor Design Lab** — three clients with a problem each. Ask them questions, then order the reactor, the temperature scheme and the rate on your phone. Wrong type gives purple goo, wrong jacket freezes or ignites it, too high a rate splits it open, too low gives a puff of air.
+   * **Piping Circuit Bay** — take the Reynolds sheet, build a line, bolt every flange, fit a relief valve, then pick a pump, a compressor, or a distillation column that will help nobody. Ramp the power into the band and tick the flow regime.
+   * **Thermal Exchange Hall** — one skid running away hot, one merely cold. Which you treat first is the safety call. Then trace the heat through a furnace gap, a steel wall, a still film and a flowing fluid, and trim to steady state.
+   * **Break Room** — a colleague, a couch, and a thermodynamics nightmare you will not enjoy.
+5. Report back to Mr. Tarek and find out whether you keep the job.
+
+## Scoring
+
+100 points, weighted:
+
+| | weight |
+| --- | --- |
+| Separation | 20 |
+| Reactors | 20 |
+| Fluids | 20 |
+| Heat | 20 |
+| Thermodynamics | 10 |
+| Safety | 10 |
+
+Safety points come from PPE, relief valves and treating the dangerous skid first.
+They are the smallest slice but they are collected everywhere.
+
+| score | ending |
+| --- | --- |
+| 98–100 | the boss takes off his own badge and gives it to you |
+| 90–97 | Employee of the Day |
+| 70–89 | hired, solid position |
+| 50–69 | kept on, but you start training on Monday |
+| under 50 | a cartoon kick out of the door |
+
+## Running time
+
+About fifteen minutes for someone reading carefully, quicker once they know it.
+If the booth queue is long, the easiest things to shorten are in `game/src/`:
+
+* `08-sep.js` — drop entries from `SEP_BAYS` (five samples today)
+* `09-rea.js` — drop a client from `REA_CLIENTS` (three today)
+* `10-flu.js` — remove the second entry from `FLU_RIGS` to run one line instead of two,
+  or shorten `PIPE_SEGS` and `JOINTS` to place fewer pipes and flanges
+* `12-brk.js` — drop entries from `DREAM_Q`
+
+Rebuild afterwards (see below). Nothing else needs changing; the score
+re-weights itself automatically.
+
+## Testing a single station
+
+Add a hash to the URL to jump straight in, which is handy when demonstrating
+one part at a booth:
+
+```
+ChemEngQuest.html#sep     separation lab
+ChemEngQuest.html#rea     reactor lab
+ChemEngQuest.html#flu     piping bay
+ChemEngQuest.html#hea     thermal hall
+ChemEngQuest.html#brk     break room
+ChemEngQuest.html#hub     the refinery yard
+ChemEngQuest.html#end     the verdict
+ChemEngQuest.html#hub,mute   any of the above with the music off
+```
+
+## Editing the game
+
+`ChemEngQuest.html` is generated. Edit the parts in `game/src/` and rebuild:
+
+```
+node game/build.mjs
+```
+
+| file | what is in it |
+| --- | --- |
+| `00-style.css` | page chrome |
+| `01-core.js` | canvas, input, scenes, transitions, particles, drawing helpers |
+| `02-audio.js` | the synthesised soundtrack and every sound effect |
+| `03-people.js` | the character rig: walk cycles, faces, hair, PPE, speech bubbles |
+| `04-fx.js` | dust clouds, steam, fire, frost, water, and all the process equipment |
+| `05-state.js` | score, skill behaviour, hints, conversations |
+| `06-menus.js` | logo, menu, character select, briefing |
+| `07-hub.js` | the refinery yard |
+| `08-sep.js` … `12-brk.js` | the five stations |
+| `13-end.js` | the verdict |
+| `99-boot.js` | startup |
+
+There are no dependencies and no build tools beyond Node for the concatenation
+step. Art, music and sound are all generated in code, so there are no asset
+files to lose.

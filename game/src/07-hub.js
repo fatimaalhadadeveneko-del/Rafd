@@ -248,13 +248,13 @@ const S_hub = {
     /* ================= the boss, once everything is done ================= */
     const all = this.allDone();
     if (all){
-      const bx = 1240, by = 600;
+      const bx = 1232, by = 648;
       drawPerson(NPCS.boss, bx, by, 2.1, { dir:'left', face:'neutral', seed:2 });
-      const near = Math.hypot(this.px-bx, this.py-by) < 120;
+      const near = Math.hypot(this.px-bx, this.py-by) < 140;
       bubble(near ? 'Right. Let us talk about your day.' : 'Over here, graduate.',
-             bx-30, by-96, {w:216, size:16, pop:1});
+             bx-70, by-232, {w:216, size:16, pop:1});
       if (near){
-        txt('SPACE', bx-30, by+22, 13, '#f5b53d');
+        txt('SPACE', bx, by+20, 13, '#f5b53d');
         if (keyPressed(' ','Enter','Space')){ SFX.click(); go(S_end, 'fade'); }
       }
     }
