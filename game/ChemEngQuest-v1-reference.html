@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>ChemEng Quest — v1 Reference Build</title>
+<style>
+  :root{ --blue:#1e9cd7; --deep:#0d2b3e; --ink:#0b1b26; --paper:#f4f7f9; --gold:#f5b53d; }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:#05131c;color:#eaf4fa;
+    font-family:"Trebuchet MS",Verdana,system-ui,sans-serif;overflow:hidden}
+  #wrap{position:fixed;inset:0;display:grid;place-items:center}
+  #stage{position:relative;width:min(100vw,calc(100vh*16/9));height:min(100vh,calc(100vw*9/16));
+    background:#07202e;overflow:hidden;box-shadow:0 0 60px #000}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block;image-rendering:auto}
+  #ui{position:absolute;inset:0;pointer-events:none}
+  .btn{pointer-events:auto;cursor:pointer;border:2px solid var(--blue);background:rgba(8,40,58,.9);
+    color:#eaf4fa;padding:.7em 1.4em;border-radius:10px;font-size:1rem;font-weight:700;letter-spacing:.04em}
+  .btn:hover{background:var(--blue);color:#04121a}
+  #hud{position:absolute;top:10px;left:12px;font-size:13px;opacity:.9;text-shadow:0 2px 4px #000}
+  #hint{position:absolute;bottom:10px;right:12px;font-size:12px;opacity:.6}
+</style>
+</head>
+<body>
+<div id="wrap"><div id="stage">
+  <canvas id="cv" width="1280" height="720"></canvas>
+  <div id="ui"><div id="hud"></div><div id="hint">Arrows / WASD to walk · Space or Enter to talk · Mouse to click</div></div>
+</div></div>
+<script>
+/* ============================================================
+   ChemEng Quest — v1 REFERENCE BUILD
+   Kept unmodified as a fallback. The polished build with full
+   animation lives in ChemEngQuest.html
+   ============================================================ */
+(()=>{
+const cv=document.getElementById('cv'), g=cv.getContext('2d');
+const W=1280,H=720;
+const hud=document.getElementById('hud'), uiLayer=document.getElementById('ui');
+
+/* ---------- input ---------- */
+const keys={}, mouse={x:0,y:0,down:false,clicked:false};
+addEventListener('keydown',e=>{keys[e.key]=keys[e.code]=true;
+  if([' ','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key))e.preventDefault();});
+addEventListener('keyup',e=>{keys[e.key]=keys[e.code]=false});
+function pos(e){const r=cv.getBoundingClientRect();
+  return{x:(e.clientX-r.left)*W/r.width,y:(e.clientY-r.top)*H/r.height}}
+cv.addEventListener('mousemove',e=>{const p=pos(e);mouse.x=p.x;mouse.y=p.y});
+cv.addEventListener('mousedown',e=>{const p=pos(e);mouse.x=p.x;mouse.y=p.y;mouse.down=true;mouse.clicked=true});
+addEventListener('mouseup',()=>mouse.down=false);
+
+/* ---------- tiny audio ---------- */
+let AC=null;
+function ac(){ if(!AC) AC=new (window.AudioContext||window.webkitAudioContext)(); if(AC.state==='suspended')AC.resume(); return AC; }
+function beep(f,d,type='square',vol=.12){ const c=ac(),o=c.createOscillator(),gn=c.createGain();
+  o.type=type;o.frequency.value=f;gn.gain.value=vol;o.connect(gn);gn.connect(c.destination);
+  const t=c.currentTime;gn.gain.setValueAtTime(vol,t);gn.gain.exponentialRampToValueAtTime(.001,t+d);
+  o.start(t);o.stop(t+d); }
+const sfx={
+  good(){[660,880,1170].forEach((f,i)=>setTimeout(()=>beep(f,.16,'square',.1),i*80))},
+  bad(){[300,240,180].forEach((f,i)=>setTimeout(()=>beep(f,.22,'sawtooth',.1),i*110))},
+  click(){beep(520,.05,'square',.07)},
+  win(){[523,659,784,1047].forEach((f,i)=>setTimeout(()=>beep(f,.3,'triangle',.12),i*130))}
+};
+
+/* ---------- characters ---------- */
+const CHARS=[
+ {id:'layla',name:'Layla Haddad',title:'The Distiller',hue:'#e0568a',
+  stats:{sep:2,rea:0,flu:0,hea:1,the:2,saf:2},
+  line:'"A batch reactor is just a pipe you close at both ends. Forever."'},
+ {id:'omar',name:'Omar Nasser',title:'The Reactor Guy',hue:'#3fb27f',
+  stats:{sep:0,rea:2,flu:1,hea:2,the:1,saf:0},
+  line:'"Distillation separates by colour. The darker stuff sinks."'},
+ {id:'yusra',name:'Yusra Kanaan',title:'The Flow Queen',hue:'#f0a02a',
+  stats:{sep:1,rea:1,flu:2,hea:0,the:0,saf:2},
+  line:'"Entropy is basically how fast the pump is spinning."'},
+ {id:'sami',name:'Sami Rahim',title:'The Generalist',hue:'#8d7ef0',
+  stats:{sep:1,rea:1,flu:1,hea:1,the:1,saf:1},
+  line:'"I am equally mediocre in every field. It is a gift."'}
+];
+let hero=CHARS[0];
+const score={sep:0,rea:0,flu:0,hea:0,the:0,saf:0};
+const MAXS={sep:5,rea:9,flu:4,hea:5,the:3,saf:5};
+const WEIGHT={sep:.20,rea:.20,flu:.20,hea:.20,the:.10,saf:.10};
+function total(){let s=0;for(const k in WEIGHT)s+=WEIGHT[k]*(score[k]/MAXS[k]);return Math.round(s*100)}
+
+/* ---------- scene machine ---------- */
+let scene=null,t=0;
+function go(s){ if(scene&&scene.exit)scene.exit(); scene=s; t=0; if(s.enter)s.enter(); }
+
+/* ---------- ui helpers ---------- */
+function clearBtns(){ [...uiLayer.querySelectorAll('.btn')].forEach(b=>b.remove()); }
+function makeBtn(label,xPct,yPct,cb){ const b=document.createElement('button');
+  b.className='btn';b.textContent=label;b.style.position='absolute';
+  b.style.left=xPct+'%';b.style.top=yPct+'%';b.style.transform='translate(-50%,-50%)';
+  b.onclick=()=>{sfx.click();cb()};uiLayer.appendChild(b);return b; }
+
+/* ---------- drawing helpers ---------- */
+function rr(x,y,w,h,r){g.beginPath();g.moveTo(x+r,y);g.arcTo(x+w,y,x+w,y+h,r);
+  g.arcTo(x+w,y+h,x,y+h,r);g.arcTo(x,y+h,x,y,r);g.arcTo(x,y,x+w,y,r);g.closePath();}
+function txt(s,x,y,size=20,col='#eaf4fa',align='center',weight=700){
+  g.fillStyle=col;g.textAlign=align;g.textBaseline='middle';
+  g.font=`${weight} ${size}px "Trebuchet MS",Verdana,sans-serif`;g.fillText(s,x,y);}
+function box(x,y,w,h,fill='rgba(6,28,42,.92)',stroke='#1e9cd7'){
+  g.fillStyle=fill;rr(x,y,w,h,12);g.fill();g.strokeStyle=stroke;g.lineWidth=2;g.stroke();}
+function person(x,y,s,col,face=1){
+  g.save();g.translate(x,y);g.scale(s*face,s);
+  g.fillStyle='#1b2a36';g.fillRect(-9,14,7,16);g.fillRect(2,14,7,16);
+  g.fillStyle=col;rr(-13,-10,26,26,6);g.fill();
+  g.fillStyle='#f0c9a0';g.beginPath();g.arc(0,-22,12,0,7);g.fill();
+  g.fillStyle='#2b1b12';g.beginPath();g.arc(0,-27,12,Math.PI,0);g.fill();
+  g.fillStyle='#14202a';g.beginPath();g.arc(-4,-22,1.8,0,7);g.arc(4,-22,1.8,0,7);g.fill();
+  g.restore();}
+
+/* ============================================================
+   SCENE: AIChE logo
+   ============================================================ */
+const S_logo={ enter(){clearBtns();},
+  draw(){ g.fillStyle='#fff';g.fillRect(0,0,W,H);
+    const a=Math.min(1,t/40), o=t>170?Math.max(0,1-(t-170)/40):1;
+    g.globalAlpha=o;
+    txt('AIChE',W/2-90,H/2-10,Math.round(120*(0.9+0.1*a)),'#1e9cd7','center',700);
+    // dotted globe
+    g.save();g.translate(W/2+190,H/2-14);
+    for(let r=0;r<9;r++)for(let c=0;c<11;c++){
+      const u=(c/10-.5)*2,v=(r/8-.5)*2; if(u*u+v*v>1)continue;
+      const d=Math.hypot(u,v), del=d*22;
+      if(t<del)continue;
+      g.globalAlpha=o*Math.min(1,(t-del)/14);
+      g.fillStyle='#1e9cd7';g.fillRect(u*62-3,v*62-3,6,6);}
+    g.restore();g.globalAlpha=o;
+    txt('The Global Home of Chemical Engineers',W/2,H/2+90,30,'#111','center',400);
+    g.globalAlpha=1;
+    if(t>215)go(S_menu); }
+};
+
+/* ============================================================
+   SCENE: main menu
+   ============================================================ */
+const S_menu={ enter(){ clearBtns();
+    makeBtn('START THE GAME',50,62,()=>go(S_select));
+    makeBtn('HOW TO PLAY',50,75,()=>go(S_help)); },
+  draw(){ const gr=g.createLinearGradient(0,0,0,H);
+    gr.addColorStop(0,'#0a2f45');gr.addColorStop(1,'#04121b');g.fillStyle=gr;g.fillRect(0,0,W,H);
+    // skyline of towers
+    for(let i=0;i<7;i++){const x=90+i*165,h=150+((i*57)%130);
+      g.fillStyle='#0d3348';g.fillRect(x,H-h,44,h);
+      g.fillStyle='#134a66';g.fillRect(x+6,H-h+10,32,6);g.fillRect(x+6,H-h+40,32,6);
+      g.fillStyle='rgba(180,230,255,'+(0.1+0.08*Math.sin(t/30+i))+')';
+      g.beginPath();g.ellipse(x+22,H-h-18,16,26,0,0,7);g.fill(); }
+    txt('ChemEng Quest',W/2,190,74,'#eaf4fa');
+    txt('First Day at the Refinery',W/2,250,26,'#7fd0f0','center',400);
+    txt('v1 reference build',W/2,H-24,13,'rgba(234,244,250,.35)','center',400); }
+};
+
+const S_help={ enter(){ clearBtns(); makeBtn('BACK',50,86,()=>go(S_menu)); },
+  draw(){ g.fillStyle='#04121b';g.fillRect(0,0,W,H);
+    box(180,110,920,470); txt('HOW TO PLAY',W/2,160,40);
+    const L=['Arrow keys or WASD walk your engineer around.',
+      'Walk into a glowing doorway to enter a station.',
+      'Space or Enter talks to whoever is in front of you.',
+      'Click to place equipment and answer.',
+      'Each character is strong in some subjects and weak in others.',
+      'A weak subject means fewer hints and worse advice.',
+      'Safety is a bonus in every station. Wear your PPE.',
+      'Your boss reads the final score. Be nice to yourself.'];
+    L.forEach((s,i)=>txt(s,W/2,215+i*44,21,'#cfe6f2','center',400)); }
+};
+
+/* ============================================================
+   SCENE: character select
+   ============================================================ */
+const S_select={ enter(){ clearBtns(); this.i=0;
+    CHARS.forEach((c,i)=>makeBtn(c.name.split(' ')[0],14+i*24,73,()=>{hero=c;go(S_intro)}));
+  },
+  draw(){ g.fillStyle='#06202e';g.fillRect(0,0,W,H);
+    txt('CHOOSE YOUR ENGINEER',W/2,64,42);
+    const names={sep:'Separation',rea:'Reactors',flu:'Fluids',hea:'Heat',the:'Thermo',saf:'Safety'};
+    CHARS.forEach((c,i)=>{ const x=100+i*280;
+      box(x,110,250,380); person(x+125,250,2.0,c.hue);
+      txt(c.name,x+125,300,20); txt(c.title,x+125,324,15,'#7fd0f0','center',400);
+      let yy=352; for(const k in c.stats){
+        txt(names[k],x+22,yy,13,'#9fc3d4','left',400);
+        for(let s=0;s<3;s++){g.fillStyle=s<=c.stats[k]?(c.stats[k]===2?'#3fd07f':c.stats[k]===1?'#f0c02a':'#e0566a'):'#16323f';
+          g.fillRect(x+150+s*22,yy-5,17,10);} yy+=22; }
+    });
+    const hovered=CHARS[Math.max(0,Math.min(3,Math.floor((mouse.x-100)/280)))];
+    box(160,540,960,90); txt(hovered.line,W/2,585,22,'#f5d78a','center',400); }
+};
+
+/* ============================================================
+   SCENE: boss intro
+   ============================================================ */
+function dialogue(lines,after){ return { i:0,lines,after,
+  enter(){clearBtns();makeBtn('NEXT',50,88,()=>{this.i++;if(this.i>=this.lines.length)after();});},
+  draw(){ const l=this.lines[Math.min(this.i,this.lines.length-1)];
+    box(120,470,1040,180); txt(l[0],170,510,20,'#f5b53d','left');
+    g.textAlign='left';g.fillStyle='#eaf4fa';
+    g.font='400 22px "Trebuchet MS",Verdana,sans-serif';
+    wrap(l[1],170,552,900,30); } };
+}
+function wrap(s,x,y,w,lh){ const words=s.split(' ');let line='',yy=y;
+  for(const wd of words){ const test=line+wd+' ';
+    if(g.measureText(test).width>w){g.fillText(line,x,yy);line=wd+' ';yy+=lh}else line=test; }
+  g.fillText(line,x,yy); }
+
+const S_intro={ enter(){ this.d=dialogue([
+    ['BOSS — Mr. Tarek','Fresh graduate, finally. Badge on, coffee down.'],
+    ['BOSS — Mr. Tarek','Four stations are waiting for you. Do not burn my refinery down.'],
+    [hero.name,'Understood, sir. Mostly understood.']
+  ],()=>go(S_hub)); this.d.enter(); },
+  draw(){ g.fillStyle='#0b2738';g.fillRect(0,0,W,H);
+    g.fillStyle='#123950';g.fillRect(0,430,W,H-430);
+    person(480,430,3.2,'#c8552e',1); person(760,430,3.2,hero.hue,-1);
+    txt('OFFICE',W/2,60,34,'#7fd0f0'); this.d.draw(); }
+};
+
+/* ============================================================
+   SCENE: hub (walking)
+   ============================================================ */
+const DOORS=[
+  {x:200,y:250,w:150,h:110,name:'Separation Techniques Lab',key:'sep'},
+  {x:430,y:250,w:150,h:110,name:'Reactor Design Lab',key:'rea'},
+  {x:660,y:250,w:150,h:110,name:'Piping Circuit Bay',key:'flu'},
+  {x:890,y:250,w:150,h:110,name:'Thermal Exchange Hall',key:'hea'},
+  {x:545,y:520,w:150,h:110,name:'Break Room',key:'brk'}
+];
+const done={};
+const S_hub={ enter(){ clearBtns(); this.px=W/2;this.py=450;this.face=1; },
+  draw(){ g.fillStyle='#0a2434';g.fillRect(0,0,W,H);
+    g.fillStyle='#10394f';g.fillRect(0,400,W,H-400);
+    for(let i=0;i<40;i++){g.fillStyle='rgba(255,255,255,.02)';g.fillRect((i*137)%W,400+((i*91)%320),3,3)}
+    // move
+    let dx=0,dy=0;
+    if(keys.ArrowLeft||keys.a||keys.A)dx--; if(keys.ArrowRight||keys.d||keys.D)dx++;
+    if(keys.ArrowUp||keys.w||keys.W)dy--; if(keys.ArrowDown||keys.s||keys.S)dy++;
+    if(dx)this.face=dx>0?1:-1;
+    this.px=Math.max(60,Math.min(W-60,this.px+dx*3.4));
+    this.py=Math.max(400,Math.min(H-40,this.py+dy*3.4));
+    let near=null;
+    DOORS.forEach(d=>{ const open=done[d.key];
+      box(d.x,d.y,d.w,d.h,open?'rgba(20,60,50,.9)':'rgba(8,40,58,.92)',open?'#3fd07f':'#1e9cd7');
+      txt(d.name,d.x+d.w/2,d.y+d.h/2,13,'#cfe6f2','center',700);
+      if(open)txt('DONE',d.x+d.w/2,d.y+d.h-18,12,'#3fd07f');
+      const cx=d.x+d.w/2, cy=d.y+d.h+40;
+      g.strokeStyle=open?'#3fd07f':'#1e9cd7';g.lineWidth=2;
+      g.beginPath();g.moveTo(cx,d.y+d.h);g.lineTo(cx,cy);g.stroke();
+      if(!open&&Math.hypot(this.px-cx,this.py-cy)<70)near=d; });
+    person(this.px,this.py,2.3,hero.hue,this.face);
+    if(near){ txt('SPACE — enter '+near.name,W/2,H-40,20,'#f5b53d');
+      if(keys[' ']||keys.Enter||keys.Space){keys[' ']=keys.Enter=keys.Space=false;
+        go(STAGES[near.key]);} }
+    const all=DOORS.every(d=>done[d.key]);
+    if(all){ txt('Mr. Tarek is waiting in the office. Walk up.',W/2,H-70,18,'#7fd0f0','center',400);
+      if(this.py<420&&Math.abs(this.px-W/2)<90){go(S_end);} }
+    hud.textContent='Score so far: '+total()+' / 100'; }
+};
+
+/* ============================================================
+   Generic "pick the right thing" stage used by v1
+   ============================================================ */
+function pickStage(cfg){ return {
+  qi:0, feedback:0, ok:false,
+  enter(){ this.qi=0;this.feedback=0;this.build(); },
+  build(){ clearBtns(); const q=cfg.q[this.qi];
+    q.opts.forEach((o,i)=>makeBtn(o,20+i*20,78,()=>this.answer(i))); },
+  answer(i){ const q=cfg.q[this.qi]; this.ok=(i===q.a);
+    if(this.ok){score[q.k||cfg.key]++;sfx.good()}else sfx.bad();
+    this.feedback=70; clearBtns(); },
+  draw(){ g.fillStyle=cfg.bg;g.fillRect(0,0,W,H);
+    txt(cfg.title,W/2,52,36,'#7fd0f0');
+    const q=cfg.q[this.qi];
+    box(180,110,920,150); txt(q.text,W/2,185,24,'#eaf4fa','center',400);
+    cfg.art(g,q,t,this.feedback,this.ok);
+    if(this.feedback>0){ this.feedback--;
+      txt(this.ok?'CORRECT':'NOT QUITE',W/2,H-90,40,this.ok?'#3fd07f':'#e0566a');
+      txt(this.ok?q.why:q.fix,W/2,H-45,20,'#cfe6f2','center',400);
+      if(this.feedback===0){ this.qi++;
+        if(this.qi>=cfg.q.length){done[cfg.key]=true;go(S_hub)}else this.build(); } }
+    hud.textContent=cfg.title+' — '+(this.qi+1)+'/'+cfg.q.length; }
+};}
+
+/* ---- v1 stage content ---- */
+const STAGES={
+ sep: pickStage({key:'sep',title:'Separation Techniques Lab',bg:'#07242f',
+  q:[{text:'You just walked into the lab. Before you touch anything you...',k:'saf',
+      opts:['Put on goggles and lab coat','Start the rig','Check your phone'],a:0,
+      why:'PPE first. Always.',fix:'Goggles and coat go on before anything else. Always.'},
+     {text:'Salt dissolved in water. Recover clean water.',
+      opts:['Evaporator','Distillation column','Adsorber'],a:0,
+      why:'Boil it off. The salt stays behind.',fix:'Salt is non-volatile. Simply boiling the water away is enough.'},
+     {text:'Ethanol and water. Different boiling points.',
+      opts:['Dryer','Distillation column','Absorber'],a:1,
+      why:'Different volatility means a distillation column.',fix:'Two volatile liquids call for distillation.'},
+     {text:'Scrub CO2 out of a flue gas using a liquid solvent.',
+      opts:['Absorber','Evaporator','Dryer'],a:0,
+      why:'Gas into liquid solvent. That is absorption.',fix:'A liquid solvent picking up a gas is absorption.'},
+     {text:'Pull trace moisture out of air using solid pellets.',
+      opts:['Distillation column','Adsorber','Absorber'],a:1,
+      why:'It sticks to a solid surface. Adsorption.',fix:'Solid pellets means adsorption, not absorption.'},
+     {text:'Wet sugar crystals. Remove the leftover water.',
+      opts:['Dryer','Absorber','Evaporator'],a:0,
+      why:'Warm air over a wet solid. A dryer.',fix:'Removing moisture from a solid is drying.'}],
+  art(g,q,t){ box(420,290,440,220,'rgba(10,50,70,.7)');
+    for(let i=0;i<24;i++){ const x=450+((i*97)%380), y=330+((i*61)%140)+Math.sin(t/18+i)*7;
+      g.fillStyle=i%3?'rgba(90,190,240,.8)':'rgba(255,255,255,.9)';
+      g.beginPath();g.arc(x,y,i%3?7:4,0,7);g.fill(); }
+    txt('the system',640,490,14,'#7fd0f0','center',400); } }),
+
+ rea: pickStage({key:'rea',title:'Reactor Design Lab',bg:'#2a1420',
+  q:[{text:'Before any of these reactors is started, what must be fitted?',k:'saf',
+      opts:['A pressure relief device','A louder alarm','Nothing, it is a small one'],a:0,
+      why:'Every pressurised vessel gets relief. No exceptions.',
+      fix:'Small vessels burst too. Relief protection is not optional.'},
+     {text:'Pharmacist: a brand new medicine, tiny test amount.',
+      opts:['Batch reactor','Packed bed','Membrane'],a:0,
+      why:'Small, new, flexible. Batch.',fix:'A new product in small amounts is a batch job.'},
+     {text:'Pharmacist: the flask gets warm while it runs.',
+      opts:['Cooling jacket','Heater','Nothing'],a:0,
+      why:'Exothermic. Take the heat out.',fix:'It releases heat, so it needs cooling.'},
+     {text:'Pharmacist: how much per run?',
+      opts:['Low','Medium','High'],a:0,
+      why:'A test batch stays small.',fix:'Scaling a brand new reaction up is how you get an overflow.'},
+     {text:'Fuels engineer: slow reaction, needs a catalyst, runs all day.',
+      opts:['Batch reactor','Packed bed','Membrane'],a:1,
+      why:'Solid catalyst, continuous. Packed bed.',fix:'A solid catalyst bed running continuously is a packed bed.'},
+     {text:'Fuels engineer: the vessel goes cold while it runs.',
+      opts:['Cooling jacket','Heater','Nothing'],a:1,
+      why:'Endothermic. Feed it heat.',fix:'It absorbs heat, so it needs a heater.'},
+     {text:'Fuels engineer: production rate?',
+      opts:['Low','Medium','High'],a:2,
+      why:'All day, every day. High.',fix:'A continuous fuel line needs a high rate.'},
+     {text:'Specialty chemist: the product builds up and stalls the reaction.',
+      opts:['Batch reactor','Packed bed','Membrane'],a:2,
+      why:'Pull the product out as it forms. Membrane.',fix:'Removing product as it forms is what a membrane reactor is for.'},
+     {text:'Specialty chemist: mildly warm to the touch.',
+      opts:['Cooling jacket','Heater','Nothing'],a:0,
+      why:'Mildly exothermic. Gentle cooling.',fix:'Warm means exothermic. Cool it.'},
+     {text:'Specialty chemist: batch size?',
+      opts:['Low','Medium','High'],a:1,
+      why:'A specialty product sits in the middle.',fix:'Specialty chemicals are a medium-scale business.'}],
+  art(g,q,t){ g.save();g.translate(640,390);
+    g.fillStyle='#4a2030';rr(-90,-90,180,180,16);g.fill();
+    g.strokeStyle='#f0a02a';g.lineWidth=3;g.stroke();
+    for(let i=0;i<14;i++){const a=t/22+i;g.fillStyle='rgba(245,181,61,.7)';
+      g.beginPath();g.arc(Math.cos(a)*(30+i*3),Math.sin(a*1.3)*(30+i*2),4,0,7);g.fill();}
+    g.restore(); } }),
+
+ flu: pickStage({key:'flu',title:'Piping Circuit Bay',bg:'#0b2030',
+  q:[{text:'The repaired line is about to be pressurised. First you fit...',k:'saf',
+      opts:['A pressure relief valve','A second gauge','A warning sign'],a:0,
+      why:'Relief valve before pressure. Every time.',
+      fix:'A sign does not vent pressure. A relief valve does.'},
+     {text:'The gas line will not move. What do you install?',
+      opts:['Compressor','Pump','Distillation column'],a:0,
+      why:'Gas needs a compressor.',fix:'You cannot pump a gas. It needs a compressor.'},
+     {text:'The water line will not move. What do you install?',
+      opts:['Compressor','Pump','Distillation column'],a:1,
+      why:'Liquid needs a pump.',fix:'A liquid line takes a pump.'},
+     {text:'Reynolds number reads 480. Flow regime?',
+      opts:['Laminar','Transition','Turbulent'],a:0,
+      why:'Under 2100 is laminar.',fix:'Re below 2100 is laminar flow.'},
+     {text:'Reynolds number reads 26 000. Flow regime?',
+      opts:['Laminar','Transition','Turbulent'],a:2,
+      why:'Above 4000 is turbulent.',fix:'Re above 4000 is turbulent.'}],
+  art(g,q,t){ g.strokeStyle='#5aa8c8';g.lineWidth=22;g.lineCap='round';
+    g.beginPath();g.moveTo(340,400);g.lineTo(940,400);g.stroke();
+    g.strokeStyle='#0b2030';g.lineWidth=14;g.stroke();
+    for(let i=0;i<12;i++){const x=340+((t*3+i*54)%600);
+      g.fillStyle='rgba(120,220,255,.85)';g.beginPath();g.arc(x,400,6,0,7);g.fill();} } }),
+
+ hea: pickStage({key:'hea',title:'Thermal Exchange Hall',bg:'#2c1a10',
+  q:[{text:'Plant A sits at 191 C and climbing. Plant B sits at 14 C. Treat which first?',k:'saf',
+      opts:['Plant A, the hot one','Plant B, the cold one'],a:0,
+      why:'Runaway heat hurts people. Hot one first.',fix:'A cold line is a nuisance. A hot one is a hazard.'},
+     {text:'That 191 C line is bare metal. Before you work beside it you...',k:'saf',
+      opts:['Isolate it and wear heat gloves','Touch it to check','Work quickly'],a:0,
+      why:'Isolate first, then protect your hands.',
+      fix:'Never check a hot line by hand. Isolate it and glove up.'},
+     {text:'Plant A is far too hot. Install what?',
+      opts:['Cooler','Heater'],a:0,why:'Too hot, so cool it.',fix:'Hot plant, cooler.'},
+     {text:'Plant B is far too cold. Install what?',
+      opts:['Cooler','Heater'],a:1,why:'Too cold, so heat it.',fix:'Cold plant, heater.'},
+     {text:'Heat crossing a solid steel wall travels by?',
+      opts:['Conduction','Convection','Radiation'],a:0,
+      why:'Through a solid is conduction.',fix:'Solids carry heat by conduction.'},
+     {text:'Heat carried away by the fluid flowing in the pipe?',
+      opts:['Conduction','Convection','Radiation'],a:1,
+      why:'Moving fluid carries heat by convection.',fix:'A moving fluid means convection.'},
+     {text:'Heat reaching you from a glowing furnace across an air gap?',
+      opts:['Conduction','Convection','Radiation'],a:2,
+      why:'Across a gap with no contact. Radiation.',fix:'No contact and no flow means radiation.'}],
+  art(g,q,t){ for(let i=0;i<2;i++){ const x=420+i*300, hot=i===0;
+      box(x,300,200,200,hot?'rgba(90,30,20,.8)':'rgba(20,50,90,.8)',hot?'#e0566a':'#5aa8c8');
+      txt(hot?'PLANT A':'PLANT B',x+100,330,18,hot?'#ffb0a0':'#a0d8ff');
+      const v=(hot?191:14)+Math.sin(t/9+i*3)*4;
+      txt(v.toFixed(1)+' C',x+100,400,32,hot?'#ff7a5a':'#7fd0f0');
+      g.fillStyle=hot?'rgba(255,90,60,.25)':'rgba(90,180,255,.25)';
+      g.fillRect(x+30,470-((v/200)*140),140,((v/200)*140)); } } }),
+
+ brk:{ q:[
+   {text:'Heat flows from which body to which?',opts:['Cold to hot','Hot to cold','Neither'],a:1},
+   {text:'Two bodies in thermal equilibrium means?',opts:['Same temperature','Same mass','Same volume'],a:0},
+   {text:'In a closed system, energy crosses the boundary as?',opts:['Kinetic and potential','Heat and work','Mass transfer'],a:1},
+   {text:'Define entropy. (Δ∮ᵷ … ∂Ω/∂ξ)',opts:['◍⟡ϟ⟠','⟆ϙ϶ϗ','ϡ⟒⟓⟔'],a:-1}],
+  qi:0,timer:0,fb:0,ok:false,
+  enter(){this.qi=0;this.timer=420;this.build();},
+  build(){clearBtns();const q=this.q[this.qi];this.timer=420;
+    q.opts.forEach((o,i)=>makeBtn(o,25+i*25,80,()=>this.ans(i)));},
+  ans(i){const q=this.q[this.qi];this.ok=(i===q.a);
+    if(this.ok){score.the++;sfx.good()}else sfx.bad();this.fb=70;clearBtns();},
+  draw(){ g.fillStyle='#e8e4d8';g.fillRect(0,0,W,H);
+    g.fillStyle='#d8d4c6';g.fillRect(0,H-180,W,180);
+    box(70,90,540,300,'rgba(250,250,245,.96)','#9aa8b0');
+    txt('THERMODYNAMICS',340,130,26,'#334');
+    g.fillStyle='#8fa8bb';for(let i=0;i<7;i++)g.fillRect(100,170+i*28,400-((i*57)%200),6);
+    box(680,90,520,300,'rgba(245,247,248,.96)','#9aa8b0');
+    txt('the board',940,130,20,'#556','center',400);
+    person(300,H-110,2.6,'#5a4a8a',1);            // professor
+    const jit=this.qi>=3?Math.sin(t)*3:Math.sin(t/4)*1.2;
+    person(880+jit,H-110,2.6,hero.hue,-1);        // you, sweating
+    for(let i=0;i<(this.qi>=3?8:3);i++){
+      g.fillStyle='rgba(120,200,255,.8)';
+      g.beginPath();g.arc(890+Math.sin(i*2)*24,H-190+((t*2+i*30)%60),3,0,7);g.fill();}
+    const q=this.q[this.qi];
+    box(160,420,960,120,'rgba(20,30,40,.9)');
+    if(this.qi>=3){g.save();g.filter='blur(3px)';}
+    txt(q.text,W/2,480,24,'#eaf4fa','center',400);
+    if(this.qi>=3)g.restore();
+    if(this.fb===0){ this.timer--;
+      g.fillStyle='#1e9cd7';g.fillRect(160,552,960*(this.timer/420),8);
+      if(this.timer<=0){sfx.bad();this.ok=false;this.fb=70;clearBtns();} }
+    if(this.fb>0){ this.fb--;
+      txt(this.qi>=3?'"WRONG. Repeat the course."':(this.ok?'CORRECT':'WRONG'),
+          W/2,600,36,this.ok&&this.qi<3?'#3fd07f':'#e0566a');
+      if(this.fb===0){ this.qi++;
+        if(this.qi>=this.q.length){done.brk=true;go(S_hub)}else this.build(); } }
+    hud.textContent='A dream. Question '+(this.qi+1)+'/4'; } }
+};
+
+/* ============================================================
+   SCENE: ending
+   ============================================================ */
+const S_end={ enter(){ clearBtns(); this.s=total(); sfx.win();
+    makeBtn('PLAY AGAIN',50,88,()=>location.reload()); },
+  draw(){ g.fillStyle='#0b2738';g.fillRect(0,0,W,H);
+    g.fillStyle='#123950';g.fillRect(0,430,W,H-430);
+    person(480,430,3.2,'#c8552e',1); person(760,430,3.2,hero.hue,-1);
+    const s=this.s;
+    let verdict,line,col;
+    if(s>=98){verdict='TAKE MY BADGE';line='"You deserve this more than I do. Desk is yours."';col='#f5b53d'}
+    else if(s>=90){verdict='EMPLOYEE OF THE DAY';line='"Outstanding. Nothing exploded. Nothing at all."';col='#3fd07f'}
+    else if(s>=70){verdict='HIRED';line='"Solid work. You keep the badge and the desk."';col='#7fd0f0'}
+    else if(s>=50){verdict='UNDER SUPERVISION';line='"You stay. You also start training on Monday."';col='#f0a02a'}
+    else {verdict='FIRED';line='"I have wasted a perfectly good coffee on you."';col='#e0566a'}
+    box(280,70,720,280); txt('REPORT CARD',W/2,120,32,'#7fd0f0');
+    txt(s+' / 100',W/2,190,64,col);
+    txt(verdict,W/2,250,36,col);
+    txt(line,W/2,310,20,'#cfe6f2','center',400);
+    const names={sep:'Separation',rea:'Reactors',flu:'Fluids',hea:'Heat',the:'Thermo',saf:'Safety'};
+    let i=0; for(const k in names){ const x=190+i*160;
+      txt(names[k],x,390,15,'#9fc3d4'); txt(score[k]+'/'+MAXS[k],x,415,20,'#eaf4fa'); i++; }
+    hud.textContent=''; }
+};
+
+/* ---------- loop ---------- */
+function frame(){ t++; scene.draw(); mouse.clicked=false; requestAnimationFrame(frame); }
+go(S_logo); frame();
+})();
+</script>
+</body>
+</html>
