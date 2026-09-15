@@ -53,7 +53,7 @@ Click once when the title card appears so the browser lets the sound play.
    * **Separation Techniques Lab** — read five animated feed samples and install the right unit. Wrong units fail in their own way: salt cakes a column solid and splits a seam, a dryer sprays brine over everything, sugar in a reboiler caramelises then carbonises.
    * **Reactor Design Lab** — three clients with a problem each. Ask them questions, then order the reactor, the temperature scheme and the rate on your phone. Wrong type gives purple goo, wrong jacket freezes or ignites it, too high a rate splits it open, too low gives a puff of air.
    * **Piping Circuit Bay** — take the Reynolds sheet, build a line, bolt every flange, fit a relief valve, then pick a pump, a compressor, or a distillation column that will help nobody. Ramp the power into the band and tick the flow regime.
-   * **Thermal Exchange Hall** — one skid running away hot, one merely cold. Which you treat first is the safety call. Then trace the heat through a furnace gap, a steel wall, a still film and a flowing fluid, and trim to steady state.
+   * **Thermal Exchange Hall** — one skid running away hot, one merely cold. Which you treat first is the safety call. Then read the wall-mounted thermal path analyser and tag how the heat crosses a furnace gap, a steel wall, a still film and a flowing fluid, before trimming to steady state.
    * **Break Room** — a colleague, a couch, and a thermodynamics nightmare you will not enjoy.
 5. Report back to Mr. Tarek and find out whether you keep the job.
 

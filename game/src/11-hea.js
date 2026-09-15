@@ -371,38 +371,101 @@ const S_hea = {
     this.mode='free';
   },
 
-  /* ---------------- heat path quiz ---------------- */
+  /* ---------------- heat path quiz, on the hall's wall monitor ---------------- */
   drawPath(){
+    /* the hall behind it, so you still know where you are standing */
     const bg = g.createLinearGradient(0,0,0,H);
-    bg.addColorStop(0,'#241610'); bg.addColorStop(1,'#0f0908');
+    bg.addColorStop(0,'#2e1a12'); bg.addColorStop(.55,'#1d110c'); bg.addColorStop(1,'#120a08');
     g.fillStyle=bg; g.fillRect(0,0,W,H);
-    txt('FOLLOW THE HEAT', W/2, 56, 32, '#f5cf8a');
-    txt('from the furnace on the left to the fluid on the right, name each step',
-        W/2, 92, 18, 'rgba(232,216,204,.7)','center',400);
+    for (let i=0;i<W/54;i++){ g.fillStyle = i%2?'rgba(255,255,255,.012)':'rgba(0,0,0,.05)';
+      g.fillRect(i*54,0,27,648); }
+    for (let i=0;i<3;i++)
+      pipeSeg(0, 20+i*17, W, 20+i*17, 11, {shell: i%2?'#7a4a32':'#6a5a4a', inner:'#3e2a1e'});
+    const fl = g.createLinearGradient(0,648,0,H);
+    fl.addColorStop(0,'#2e1c14'); fl.addColorStop(1,'#130b09');
+    g.fillStyle=fl; g.fillRect(0,648,W,H-648);
+    g.fillStyle='rgba(245,181,61,.3)'; g.fillRect(0,648,W,4);
 
-    const segW = 250, gap = 24, x0 = (W - (4*segW + 3*gap))/2, y = 150, h = 190;
+    /* ---------------- the monitor ---------------- */
+    const BX = 196, BY = 46, BW = 988, BH = 590;      // bezel
+    const SX = BX+18, SY = BY+18, SW = BW-36, SH = BH-58;   // screen
+
+    /* wall bracket behind it */
+    g.fillStyle='#231611'; rr(BX+BW/2-46, BY+BH-6, 92, 34, 5); g.fill();
+    g.fillStyle='#2e1d16'; rr(BX+BW/2-70, BY+BH+24, 140, 14, 5); g.fill();
+
+    /* bezel */
+    g.save(); g.shadowColor='rgba(0,0,0,.6)'; g.shadowBlur=26; g.shadowOffsetY=10;
+    g.fillStyle='#15191d'; rr(BX, BY, BW, BH, 16); g.fill(); g.restore();
+    g.strokeStyle='#2b3239'; g.lineWidth=3; rr(BX, BY, BW, BH, 16); g.stroke();
+    g.fillStyle='#1e242a'; rr(BX+6, BY+6, BW-12, BH-12, 12); g.fill();
+
+    /* chin: brand, power light, a couple of dead buttons */
+    txt('THERMAL PATH ANALYSER', BX+28, BY+BH-20, 13, 'rgba(180,200,215,.5)','left');
+    g.fillStyle='#3fd07f'; g.beginPath(); g.arc(BX+BW-30, BY+BH-20, 5, 0, 7); g.fill();
+    g.fillStyle='rgba(63,208,127,.25)'; g.beginPath(); g.arc(BX+BW-30, BY+BH-20, 10, 0, 7); g.fill();
+    for (let i=0;i<3;i++){
+      g.fillStyle='#2b3239'; rr(BX+BW-96-i*22, BY+BH-25, 14, 10, 3); g.fill();
+    }
+
+    /* screen */
+    const sc = g.createLinearGradient(0, SY, 0, SY+SH);
+    sc.addColorStop(0,'#08161d'); sc.addColorStop(1,'#050f15');
+    g.fillStyle = sc; rr(SX, SY, SW, SH, 8); g.fill();
+    g.save();
+    g.beginPath(); rr(SX, SY, SW, SH, 8); g.clip();
+
+    /* title bar on the screen */
+    g.fillStyle='rgba(35,166,224,.14)'; g.fillRect(SX, SY, SW, 38);
+    g.fillStyle='rgba(35,166,224,.5)'; g.fillRect(SX, SY+38, SW, 2);
+    txt('HEAT PATH  ·  FURNACE  →  PROCESS FLUID', SX+16, SY+20, 16, '#7fd0f0','left');
+    txt(this.pathAns.filter(a=>a!==null).length + ' / 4 TAGGED', SX+SW-16, SY+20, 14,
+        'rgba(159,216,239,.7)','right');
+
+    /* the four sections of the path */
+    const pw = 228, gap = 8, px0 = SX + (SW - (4*pw + 3*gap))/2;
+    const py = SY + 58, ph = 196;
     HEA_PATH.forEach((p,i)=>{
-      const x = x0 + i*(segW+gap);
-      pathArt(i, x, y, segW, h, this.pathAns[i] === null);
-      wrapText(p.label, x+segW/2, y+h+26, segW-10, 19, 15, '#e8d8cc','center',400);
+      const x = px0 + i*(pw+gap);
+      pathArt(i, x, py, pw, ph, this.pathAns[i] === null);
+      /* a chevron carrying the heat on to the next section */
+      if (i < 3){
+        const ax = x + pw + gap/2, ay = py + ph/2;
+        for (let c=0;c<2;c++){
+          const ph2 = ((T*2 + c*22) % 44) / 44;
+          g.strokeStyle = `rgba(255,186,110,${0.9*(1-ph2)})`;
+          g.lineWidth = 3; g.lineCap='round'; g.lineJoin='round';
+          const ox = -7 + ph2*14;
+          g.beginPath();
+          g.moveTo(ax+ox-4, ay-7); g.lineTo(ax+ox+3, ay); g.lineTo(ax+ox-4, ay+7);
+          g.stroke();
+        }
+      }
+      wrapText(p.label, x+pw/2, py+ph+22, pw-12, 18, 14, '#cfe0ea','center',400);
 
       HEA_MODES.forEach((m,k)=>{
-        const bw = segW, bh = 36, bx = x, by = y+h+62+k*42;
+        const bw = pw, bh = 42, bx = x, by = py+ph+50+k*48;
         const chosen = this.pathAns[i] === m;
         const locked = this.pathAns[i] !== null;
         const right = (m === p.right);
-        const z = zone(bx,by,bw,bh);
-        g.fillStyle = chosen ? (right ? 'rgba(20,70,48,.98)' : 'rgba(70,20,26,.98)')
-                    : locked ? 'rgba(24,16,14,.7)'
-                    : z.hover ? 'rgba(62,32,18,.98)' : 'rgba(26,16,12,.94)';
-        rr(bx,by,bw,bh,8); g.fill();
+        const z = locked ? {hover:false,clicked:false} : zone(bx,by,bw,bh);
+        g.save();
+        if (z.hover){ g.shadowColor='#23a6e0'; g.shadowBlur=16; }
+        g.fillStyle = chosen ? (right ? 'rgba(14,64,44,.98)' : 'rgba(66,16,24,.98)')
+                    : locked ? 'rgba(10,26,34,.65)'
+                    : z.hover ? 'rgba(14,54,74,.98)' : 'rgba(8,28,38,.94)';
+        rr(bx, z.hover?by-2:by, bw, bh, 8); g.fill();
+        g.restore();
         g.strokeStyle = chosen ? (right ? '#3fd07f' : '#ee5f6e')
-                      : locked ? 'rgba(120,100,90,.25)'
-                      : z.hover ? '#ff7a3a' : 'rgba(255,122,58,.28)';
-        g.lineWidth = chosen ? 2.6 : 1.8; rr(bx,by,bw,bh,8); g.stroke();
-        txt(m, bx+bw/2, by+bh/2, 17,
-            chosen ? (right?'#8fe8b8':'#f0b0bc') : locked ? 'rgba(200,185,175,.35)' : '#e8d8cc');
-        if (z.clicked && !locked){
+                      : locked && right ? 'rgba(63,208,127,.45)'
+                      : locked ? 'rgba(90,120,135,.25)'
+                      : z.hover ? '#23a6e0' : 'rgba(35,166,224,.35)';
+        g.lineWidth = chosen ? 2.8 : 1.8;
+        rr(bx, z.hover?by-2:by, bw, bh, 8); g.stroke();
+        txt(m, bx+bw/2, (z.hover?by-2:by)+bh/2, 17,
+            chosen ? (right?'#8fe8b8':'#f0b0bc')
+                   : locked ? 'rgba(180,205,220,.35)' : '#dceaf2');
+        if (z.clicked){
           this.pathAns[i] = m;
           if (right){ this.pts += 1; SFX.good(); } else { SFX.bad(); }
           this.say(p.why, 200);
@@ -410,16 +473,46 @@ const S_hea = {
       });
     });
 
+    /* the readout strip along the bottom of the screen */
+    const stripY = SY + SH - 62;
+    g.fillStyle='rgba(35,166,224,.10)'; g.fillRect(SX, stripY, SW, 62);
+    g.fillStyle='rgba(35,166,224,.4)'; g.fillRect(SX, stripY, SW, 2);
     if (this.noteT > 0){
       this.noteT -= dt;
-      const cw=760, cx=W/2-cw/2, cy=H-78;
-      panel(cx, cy, cw, 52, 'rgba(8,4,4,.96)', 'rgba(245,181,61,.55)');
-      txt(this.note, W/2, cy+27, 18, '#f5e0c8','center',400);
+      wrapText(this.note, SX+SW/2, stripY+30, SW-60, 22, 17, '#f5e0c8','center',400);
+    } else if (this.pathAns.every(a=>a!==null)){
+      txt('path tagged end to end  ·  ' + this.pts + ' correct', SX+SW/2, stripY+30, 17,
+          '#8fe8b8','center',400);
+    } else {
+      txt('tag every section with the mechanism that carries the heat through it',
+          SX+SW/2, stripY+30, 17, 'rgba(207,224,234,.7)','center',400);
     }
 
-    if (this.pathAns.every(a=>a!==null)){
-      if (this.noteT <= 0 && button('NOW TRIM THE COOLER', W/2-160, H-70, 320, 46,
-                                    {col:'#3fd07f', size:19})){
+    /* screen glare and scanlines, so it reads as a screen */
+    for (let y2 = SY; y2 < SY+SH; y2 += 3){
+      g.fillStyle='rgba(0,0,0,.055)'; g.fillRect(SX, y2, SW, 1);
+    }
+    const gl = g.createLinearGradient(SX, SY, SX+SW*0.7, SY+SH);
+    gl.addColorStop(0,'rgba(255,255,255,.055)'); gl.addColorStop(.45,'rgba(255,255,255,.012)');
+    gl.addColorStop(1,'rgba(255,255,255,0)');
+    g.fillStyle = gl; g.fillRect(SX, SY, SW, SH);
+    g.restore();
+    g.strokeStyle='rgba(120,160,185,.35)'; g.lineWidth=2; rr(SX, SY, SW, SH, 8); g.stroke();
+
+    /* the engineer standing at the monitor, and the glow it throws on them */
+    const glow = g.createRadialGradient(BX+BW/2, BY+BH/2, 60, BX+BW/2, BY+BH/2, 900);
+    glow.addColorStop(0,'rgba(60,150,200,.10)'); glow.addColorStop(1,'rgba(60,150,200,0)');
+    g.fillStyle = glow; g.fillRect(0,0,W,H);
+    drawPerson(hero, 104, 700, 1.9, {
+      dir:'right', seed:5,
+      face: this.pathAns.every(a=>a!==null) ? 'happy' : 'neutral',
+      pose: this.noteT > 0 ? 'point' : 'think',
+      ppe:{ hat:true, goggles:G.ppe.goggles, coat:G.ppe.coat }
+    });
+
+    if (this.pathAns.every(a=>a!==null) && this.noteT <= 0){
+      if (button('NOW TRIM THE COOLER', W-352, H-58, 320, 44,
+                 {col:'#3fd07f', size:19})){
         this.mode='trim'; this.pathDone=true; SFX.click();
       }
     }
