@@ -46,7 +46,8 @@ const REA_CLIENTS = [
         a:'Barely anything. Enough to fill one small vial for testing.',
         hardA:'The regulator has me capped at twenty grams per run until the trial clears.',
         good:'Tiny and experimental. Low rate. We are not building a factory yet.',
-        bad:'Small today, huge tomorrow. Order the high rate now and save a trip.' }
+        bad:'Small today, huge tomorrow. Order the high rate now and save a trip.',
+        hardBad:'Twenty grams is an insult to this refinery. Maximum rate. We ask forgiveness later.' }
     ],
     right:{ type:'batch', therm:'cool', scale:'low' },
     praise:'Small, new, and it makes its own heat. Batch reactor with cooling, low rate.' },
@@ -76,7 +77,8 @@ const REA_CLIENTS = [
         a:'Everything you can give me. This runs twenty four hours.',
         hardA:'A tank farm that takes forty cubic metres an hour and has never once been full.',
         good:'Continuous fuel duty. High rate.',
-        bad:'Twenty four hours is a long time, so go low and let it build up slowly.' }
+        bad:'Twenty four hours is a long time, so go low and let it build up slowly.',
+        hardBad:'A tank that never fills is a leak, not a demand. Go low until somebody fixes it.' }
     ],
     right:{ type:'pbr', therm:'heat', scale:'high' },
     praise:'Slow reaction, solid catalyst, continuous, and it absorbs heat. Packed bed with heating, high rate.' },
