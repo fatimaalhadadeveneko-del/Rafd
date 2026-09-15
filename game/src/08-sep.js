@@ -354,6 +354,7 @@ const S_sep = {
       this.scored = true;
       award('sep', this.solved.filter(Boolean).length, SEP_BAYS.length);
       award('saf', this.ppeStage, 2);
+      if (this.solved.every(Boolean)) G.done.sep = true;
     }
   },
   camX(){ return clamp(this.px - W/2, 0, SEP_ROOM - W); },

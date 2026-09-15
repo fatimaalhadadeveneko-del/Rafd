@@ -213,6 +213,7 @@ const S_rea = {
       this.scored = true;
       award('rea', this.pts, 9);
       award('saf', this.safePts, 3);
+      if (this.solved.every(Boolean)) G.done.rea = true;
     }
   },
   camX(){ return clamp(this.px - W/2, 0, REA_ROOM - W); },
