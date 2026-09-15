@@ -2955,75 +2955,118 @@ const SEP_UNITS = [
 const sepUnit = id => SEP_UNITS.find(u=>u.id===id);
 
 const SEP_BAYS = [
-  { x:430, tag:'SAMPLE 01', sample:'saltwater',
-    prompt:'Sea water. Salt dissolved in it. We want the water back, clean.',
+  { x:430, tag:'SAMPLE 01', sample:'saltwater', product:'water',
+    prompt:'A tank off the seawater intake. Downstream says it is fouling their boiler.',
     right:'evap',
     why:'Salt does not boil. Boil the water off and the salt stays behind.',
     hint:'One of them boils. The other one really does not.',
     strong:'Non-volatile solid in water. Boil the water off, done.',
     weak:'Salt is heavier, so a column will drop it out the bottom. Obviously.',
     weakPick:'col',
+    /* the lazy first impression, before anyone actually looks */
+    glance:'Water. It is just water. I can see through it.',
+    glanceOk:'Looks like water. Looks can be expensive, though.',
+    probe:'conductivity probe',
+    readout:[['CONDUCTIVITY','52.4 mS/cm'],['RESIDUE ON DRYING','3.5 % w/w'],['VOLATILE SOLIDS','none']],
+    reveal:'Conductivity is off the scale and it leaves 3.5 percent residue. That is dissolved salt, and salt does not boil.',
     wrong:{
       col:{ fail:'crust', line:'The salt has no vapour pressure. It just cakes on every tray.' },
       dry:{ fail:'spray', line:'You cannot blow-dry the sea. Now there is salt on everything.' },
       abs:{ fail:'flood', line:'Absorbing what, exactly? There is no gas here.' },
       ads:{ fail:'sludge',line:'The pellets drowned. They were never meant to swim.' } } },
 
-  { x:910, tag:'SAMPLE 02', sample:'binary',
-    prompt:'Ethanol and water, mixed. Both boil, but at different temperatures.',
+  { x:910, tag:'SAMPLE 02', sample:'binary', product:'ethanol',
+    prompt:'A clear liquid from the fermentation skid. It needs splitting into two products.',
     right:'col',
     why:'Two volatile liquids with different boiling points. That is a column.',
     hint:'Both of them boil. One boils first. Use that, over and over.',
-    strong:'Different volatilities. Column, no argument.',
+    strong:'Two volatiles, different boiling points. Column, no argument.',
     weak:'Just boil it. Whatever comes off first is probably the good one.',
     weakPick:'evap',
+    glance:'One clear liquid. So it is one thing. Nothing to separate here, surely.',
+    glanceOk:'Clear, but that means nothing. Two clear liquids look like one.',
+    probe:'boiling curve',
+    readout:[['FIRST BUBBLE','78 C'],['LAST DROP','100 C'],['COMPONENTS','2, both volatile']],
+    reveal:'It boils across a range, not at a point. Two volatile components: one leaves at 78, the other at 100.',
     wrong:{
       evap:{ fail:'murk', line:'Both boiled. You made warm mixture instead of two products.' },
       dry: {fail:'murk',  line:'There is no solid here to dry. You warmed a puddle.' },
       abs: {fail:'flood', line:'The solvent dissolved into your feed. Now there are three things.' },
       ads: {fail:'sludge',line:'Soaked pellets, no separation, and a very expensive bin.' } } },
 
-  { x:1390, tag:'SAMPLE 03', sample:'fluegas',
-    prompt:'Flue gas with CO2 in it. There is a tank of liquid amine solvent beside you.',
+  { x:1390, tag:'SAMPLE 03', sample:'fluegas', product:'co2',
+    prompt:'A gas stream off the furnace. Something in it has to come out before the stack.',
     right:'abs',
     why:'Gas into a liquid solvent, counter-current. Absorption.',
     hint:'The gas has to move into that liquid. What takes a gas into a liquid?',
-    strong:'Gas into liquid solvent. Absorber, counter-current.',
+    strong:'CO2 in a gas, and a liquid amine sitting right there. Absorber, counter-current.',
     weak:'It is a gas, so we heat it until the CO2 gets bored and leaves.',
     weakPick:'evap',
+    glance:'Smoke. Smoke goes up the chimney. That is what chimneys are for.',
+    glanceOk:'Flue gas. I should find out what is actually in it before I guess.',
+    probe:'gas analyser',
+    readout:[['CO2','12.4 mol %'],['N2','balance'],['ON THE SKID','amine solvent, 8 m3']],
+    reveal:'Twelve percent CO2, and there is a full tank of liquid amine solvent beside you. That solvent is there for a reason.',
     wrong:{
       evap:{ fail:'blow', line:'You boiled a gas. The CO2 sailed straight out the stack.' },
       col: { fail:'blow', line:'Nothing condensed. The whole feed went out the top.' },
       dry: { fail:'blow', line:'You blew warm air at flue gas. It blew back.' },
       ads: { fail:'blow', line:'Not wrong forever, but you were handed a liquid solvent. Use it.' } } },
 
-  { x:1870, tag:'SAMPLE 04', sample:'moist',
-    prompt:'Compressed air with a trace of moisture. A drum of solid desiccant pellets is here.',
+  { x:1870, tag:'SAMPLE 04', sample:'moist', product:'dryair',
+    prompt:'Instrument air for the whole plant. The valves downstream keep sticking.',
     right:'ads',
     why:'The water sticks to the surface of the solid. Adsorption.',
     hint:'It sticks to the outside of a solid. One word, starts with ad.',
-    strong:'Trace moisture onto a solid bed. Adsorber.',
+    strong:'Trace moisture, and a drum of desiccant right here. Adsorber.',
     weak:'Pellets, liquid, same idea. Absorber. They are basically the same word.',
     weakPick:'abs',
+    glance:'Air. Free, everywhere, already clean. This one is a trick question.',
+    glanceOk:'Air that sticks valves has water in it. How much, though?',
+    probe:'dew point meter',
+    readout:[['DEW POINT','+8 C'],['SPEC','-40 C'],['ON THE SKID','desiccant pellets']],
+    reveal:'Dew point is plus eight and the spec is minus forty. There is water in this air, and the drum beside you is full of solid desiccant.',
     wrong:{
       abs:{ fail:'flood', line:'Absorption goes INTO a liquid. These are pellets. Different word.' },
       evap:{fail:'blow',  line:'You heated air that was already dry enough to annoy you.' },
       col: {fail:'blow',  line:'A whole column for a trace of water. The water was not impressed.' },
       dry: {fail:'blow',  line:'A dryer dries solids. This is air. The air remains damp.' } } },
 
-  { x:2340, tag:'SAMPLE 05', sample:'wetsugar',
-    prompt:'Sugar crystals straight off the filter. Still wet. The product has to come out dry.',
+  { x:2340, tag:'SAMPLE 05', sample:'wetsugar', product:'sugar',
+    prompt:'Crystals straight off the filter. Packaging is refusing to take them in this state.',
     right:'dry',
     why:'Wet solid, warm air over it. That is drying.',
     hint:'It is a wet solid. There is a unit named after exactly this job.',
     strong:'Wet solid in, dry solid out. Dryer.',
     weak:'Boil it. The water leaves, the sugar stays. Sugar loves heat.',
     weakPick:'evap',
+    glance:'Sugar. Looks finished to me. Bag it and let us all go home.',
+    glanceOk:'It looks dry from here, but filter cake never is.',
+    probe:'moisture balance',
+    readout:[['FREE MOISTURE','11.2 % w/w'],['SPEC','below 0.5 %'],['DEGRADES ABOVE','160 C']],
+    reveal:'Eleven percent free moisture, and it caramelises above 160. It needs warm air over it, not heat through it.',
     wrong:{
       evap:{ fail:'goo',  line:'You boiled sugar. That is not a product, that is dessert.' },
       col: { fail:'burnt',line:'Sugar in a reboiler. It caramelised, then it carbonised.' },
       abs: { fail:'flood',line:'You washed the product you were asked to dry.' },
       ads: { fail:'sludge',line:'Wet sugar and dry pellets. Now you have one wet brick.' } } }
+];
+
+/* things a clueless engineer says out loud while wandering the lab,
+   none of which are true, all of which sound reasonable to him */
+const SEP_CHATTER = [
+  'Every one of these is a liquid. So one unit should handle all of them, no?',
+  'If it is see-through it is water. That is basic science.',
+  'Why is there a column AND an absorber. They are both tall tubes.',
+  'Adsorber, absorber. Somebody in procurement is having a laugh.',
+  'I feel like boiling solves most of these, honestly.',
+  'The heavier thing always sinks. I will be using that a lot today.',
+  'Separation is just letting things sit still until they get bored.'
+];
+const SEP_CHATTER_OK = [
+  'Do not guess. Read the stream first.',
+  'Every one of these looks simpler than it is.',
+  'Check what you were handed. There is usually a reason it is on the skid.'
 ];
 
 /* ============================================================
@@ -3041,7 +3084,7 @@ function beakerGlass(x, y, w, h){
     g.moveTo(x+w/2-16, y-h*i/4); g.lineTo(x+w/2-4, y-h*i/4); g.stroke(); }
 }
 
-function sepSample(kind, x, y){
+function sepSample(kind, x, y, known){
   if (kind === 'saltwater'){
     const w=150, h=130;
     g.save(); g.beginPath(); rr(x-w/2+4, y-h+4, w-8, h-8, 6); g.clip();
@@ -3050,7 +3093,7 @@ function sepSample(kind, x, y){
     bubbles(x-w/2+10, y-h+50, w-20, h-56, 4, .5);
     g.restore();
     beakerGlass(x,y,w,h);
-    txt('H2O + NaCl', x, y-h-18, 17, '#9fe8ff');
+    txt(known ? 'H2O + NaCl' : 'FEED  ·  unidentified', x, y-h-18, 17, known ? '#9fe8ff' : 'rgba(159,232,255,.6)');
     // a pinch of salt falling in
     if (Math.random()<.10) spawn({ x:x+rnd(-24,24), y:y-h-4, vx:0, vy:rnd(1.2,2.4),
       g:.05, life:44, max:44, size:rnd(2,4), col:'#fff', kind:'sq', vr:.1 });
@@ -3069,11 +3112,13 @@ function sepSample(kind, x, y){
     }
     g.restore();
     beakerGlass(x,y,w,h);
-    txt('A + B', x, y-h-18, 17, '#9fe8ff');
-    g.fillStyle='rgba(255,225,130,.95)'; g.beginPath(); g.arc(x-58, y+22, 5, 0, 7); g.fill();
-    txt('A  bp 78 C', x-46, y+22, 13, '#e8dca0','left',400);
-    g.fillStyle='rgba(140,235,255,.95)'; g.beginPath(); g.arc(x+8, y+22, 5, 0, 7); g.fill();
-    txt('B  bp 100 C', x+20, y+22, 13, '#a8e2f0','left',400);
+    txt(known ? 'A + B' : 'FEED  ·  unidentified', x, y-h-18, 17, known ? '#9fe8ff' : 'rgba(159,232,255,.6)');
+    if (known){
+      g.fillStyle='rgba(255,225,130,.95)'; g.beginPath(); g.arc(x-58, y+22, 5, 0, 7); g.fill();
+      txt('A  bp 78 C', x-46, y+22, 13, '#e8dca0','left',400);
+      g.fillStyle='rgba(140,235,255,.95)'; g.beginPath(); g.arc(x+8, y+22, 5, 0, 7); g.fill();
+      txt('B  bp 100 C', x+20, y+22, 13, '#a8e2f0','left',400);
+    }
   }
   else if (kind === 'fluegas'){
     // a duct carrying grey gas with CO2 molecules in it
@@ -3095,7 +3140,7 @@ function sepSample(kind, x, y){
     }
     g.restore();
     g.strokeStyle='#5f7280'; g.lineWidth=3; rr(x-90, y-120, 180, 74, 10); g.stroke();
-    txt('FLUE GAS  +  CO2', x, y-136, 16, '#f0a88f');
+    txt(known ? 'FLUE GAS  +  CO2' : 'STACK GAS  ·  composition unknown', x, y-136, 16, known ? '#f0a88f' : 'rgba(240,168,143,.6)');
     // solvent drum beside it
     barrel(x+76, y+4, 1.3, '#3f9ad0');
     txt('amine solvent', x+76, y+22, 12, '#8fd0f0');
@@ -3112,7 +3157,7 @@ function sepSample(kind, x, y){
     }
     g.restore();
     g.strokeStyle='#5f7280'; g.lineWidth=3; rr(x-90, y-120, 180, 74, 10); g.stroke();
-    txt('DRY AIR  +  trace H2O', x, y-136, 16, '#9fe8ff');
+    txt(known ? 'AIR  +  trace H2O' : 'INSTRUMENT AIR  ·  dew point unknown', x, y-136, 16, known ? '#9fe8ff' : 'rgba(159,232,255,.6)');
     // pellet drum
     g.fillStyle='#6a5f4a'; rr(x+56, y-34, 48, 38, 5); g.fill();
     g.strokeStyle='#4a4232'; g.lineWidth=2; rr(x+56, y-34, 48, 38, 5); g.stroke();
@@ -3142,7 +3187,7 @@ function sepSample(kind, x, y){
     g.fillStyle = grad; g.fillRect(x-96, y-40, 192, 38);
     g.restore();
     g.strokeStyle='#5f6a72'; g.lineWidth=2.4; rr(x-100, y-46, 200, 46, 6); g.stroke();
-    txt('WET SUGAR CRYSTALS', x, y-64, 16, '#ffe9c0');
+    txt(known ? 'WET SUGAR CRYSTALS' : 'FILTER CAKE  ·  moisture unknown', x, y-64, 16, known ? '#ffe9c0' : 'rgba(255,233,192,.6)');
     if (Math.random()<.16) emitDrip(x+rnd(-90,90), y, 1, 'rgba(150,215,245,.9)');
   }
 }
@@ -3245,13 +3290,105 @@ function sepOutcome(fail, unitId, x, y, k){
 }
 
 /* product jar that shows what you actually made */
-function productJar(x, y, good, fail){
+/* ============================================================
+   what actually comes out of each bay, drawn as the real thing
+   ============================================================ */
+function sepProduct(kind, x, y, good, fail){
+  if (!good){ badProduct(x, y, fail); return; }
+  g.save();
+  if (kind === 'water'){
+    /* a jar of clear water, and the salt it left behind */
+    g.fillStyle='rgba(215,240,250,.16)'; rr(x-46,-52+y, 44, 52, 6); g.fill();
+    g.save(); g.beginPath(); rr(x-44, y-50, 40, 48, 5); g.clip();
+    liquid(x-44, y-34, 40, 32, {r:0, c1:'#2f8fc4', c2:'#7fe0f8'});
+    g.restore();
+    g.strokeStyle='rgba(225,245,255,.7)'; g.lineWidth=2.2; rr(x-46, y-52, 44, 52, 6); g.stroke();
+    txt('WATER', x-24, y+14, 11, '#8fe8b8');
+    // the salt cake
+    g.fillStyle='#8a939a'; rr(x+6, y-14, 46, 14, 3); g.fill();
+    for (let i=0;i<16;i++){
+      g.save(); g.translate(x+12+nz(i)*36, y-18-nz(i+7)*10); g.rotate(nz(i+3)*3);
+      g.fillStyle = i%3 ? '#ffffff' : '#e8eef2';
+      const sz = 3.4+nz(i+11)*3; g.fillRect(-sz/2,-sz/2,sz,sz); g.restore();
+    }
+    txt('SALT', x+29, y+14, 11, '#cfe6f2');
+  }
+  else if (kind === 'ethanol'){
+    /* two bottles, correctly labelled */
+    const bot = (bx, col, lab, lvl)=>{
+      g.fillStyle='rgba(215,240,250,.16)'; rr(bx-17, y-58, 34, 58, 5); g.fill();
+      g.save(); g.beginPath(); rr(bx-15, y-56, 30, 54, 4); g.clip();
+      liquid(bx-15, y-56+ (1-lvl)*54, 30, 54*lvl, {r:0, c1:col[0], c2:col[1]});
+      g.restore();
+      g.strokeStyle='rgba(225,245,255,.7)'; g.lineWidth=2; rr(bx-17, y-58, 34, 58, 5); g.stroke();
+      g.fillStyle='#8a939a'; rr(bx-7, y-66, 14, 9, 3); g.fill();
+      g.fillStyle='#f6f2e2'; rr(bx-15, y-34, 30, 13, 2); g.fill();
+      txt(lab, bx, y-27, 9, '#2f4250');
+    };
+    bot(x-24, ['#b8a02a','#f0dc6a'], 'ETHANOL', .74);
+    bot(x+22, ['#2f8fc4','#7fe0f8'], 'WATER',   .62);
+    txt('two products', x, y+14, 11, '#8fe8b8');
+  }
+  else if (kind === 'co2'){
+    /* a captured-CO2 cylinder and a clean stack plume */
+    g.fillStyle='#4a5f6c'; rr(x-44, y-64, 32, 64, 14); g.fill();
+    g.fillStyle='#3a4d58'; rr(x-24, y-64, 12, 64, 12); g.fill();
+    g.strokeStyle='#2c3b45'; g.lineWidth=2; rr(x-44, y-64, 32, 64, 14); g.stroke();
+    g.fillStyle='#8a939a'; rr(x-33, y-74, 10, 12, 3); g.fill();
+    g.fillStyle='#f6f2e2'; rr(x-43, y-42, 30, 14, 2); g.fill();
+    txt('CO2', x-28, y-35, 11, '#2f4250');
+    // clean gas going on its way
+    g.fillStyle='#3d4a54'; rr(x+4, y-46, 46, 22, 5); g.fill();
+    g.save(); g.beginPath(); rr(x+6, y-44, 42, 18, 4); g.clip();
+    g.fillStyle='#1d3644'; g.fillRect(x+6, y-44, 42, 18);
+    for (let i=0;i<7;i++){
+      const px = x+6 + ((T*1.6 + i*12) % 44);
+      g.fillStyle='rgba(180,225,245,.7)';
+      g.beginPath(); g.arc(px, y-35 + Math.sin(T/12+i)*4, 2.2, 0, 7); g.fill();
+    }
+    g.restore();
+    txt('lean gas', x+27, y+14, 11, '#8fe8b8');
+  }
+  else if (kind === 'dryair'){
+    /* an air receiver with a dew point that finally meets spec */
+    g.fillStyle='#6a7a86'; rr(x-40, y-58, 80, 50, 16); g.fill();
+    g.fillStyle='#57666f'; rr(x+8, y-58, 32, 50, 16); g.fill();
+    g.strokeStyle='#3e4b54'; g.lineWidth=2.2; rr(x-40, y-58, 80, 50, 16); g.stroke();
+    g.fillStyle='#8a939a'; rr(x-36, y-8, 10, 10, 2); g.fill(); rr(x+26, y-8, 10, 10, 2); g.fill();
+    readout(x-32, y-48, 64, 30, ['-42 C dp'], { size:13, col:'#5ce8a8' });
+    txt('dry air', x, y+14, 11, '#8fe8b8');
+  }
+  else {
+    /* free-flowing dry sugar in an open sack */
+    g.fillStyle='#d8c9a8';
+    g.beginPath();
+    g.moveTo(x-34, y); g.lineTo(x-26, y-48); g.lineTo(x+26, y-48); g.lineTo(x+34, y);
+    g.closePath(); g.fill();
+    g.fillStyle='#c4b492';
+    g.beginPath(); g.moveTo(x+10, y-48); g.lineTo(x+26, y-48); g.lineTo(x+34, y); g.lineTo(x+18, y);
+    g.closePath(); g.fill();
+    g.strokeStyle='#a89876'; g.lineWidth=2;
+    g.beginPath(); g.moveTo(x-34, y); g.lineTo(x-26, y-48); g.lineTo(x+26, y-48); g.lineTo(x+34, y);
+    g.closePath(); g.stroke();
+    // a heap of crystals spilling over the top
+    for (let i=0;i<26;i++){
+      g.save(); g.translate(x-24+nz(i)*48, y-52-nz(i+9)*9); g.rotate(nz(i+4)*3);
+      g.fillStyle = i%4 ? '#fbf7ec' : '#ffffff';
+      const sz = 3.2+nz(i+13)*3.4; g.fillRect(-sz/2,-sz/2,sz,sz);
+      g.restore();
+    }
+    g.fillStyle='#f6f2e2'; rr(x-20, y-30, 40, 15, 2); g.fill();
+    txt('SUGAR', x, y-22, 11, '#2f4250');
+    txt('dry, free flowing', x, y+14, 11, '#8fe8b8');
+  }
+  g.restore();
+}
+
+/* whatever you made instead, when the unit was wrong */
+function badProduct(x, y, fail){
   g.fillStyle='rgba(215,240,250,.14)'; rr(x-26, y-52, 52, 52, 7); g.fill();
   g.save(); g.beginPath(); rr(x-24, y-50, 48, 48, 6); g.clip();
-  if (good){
-    liquid(x-24, y-34, 48, 32, {r:0, c1:'#1f8fc8', c2:'#5fe0f8'});
-    if (Math.random()<.2) emitSpark(x+rnd(-16,16), y-rnd(6,30), 1, '#bff2ff');
-  } else if (fail === 'goo' || fail === 'sludge'){
+  if (fail === 'goo' || fail === 'sludge'){
     g.fillStyle = fail==='goo' ? '#7a2fa8' : '#6b5c3a'; g.fillRect(x-24, y-28, 48, 26);
     for (let i=0;i<5;i++){ g.fillStyle = fail==='goo' ? 'rgba(180,100,220,.7)':'rgba(140,124,84,.7)';
       g.beginPath(); g.arc(x-18+i*9, y-28+Math.sin(T/14+i)*3, 5.4, 0, 7); g.fill(); }
@@ -3261,6 +3398,10 @@ function productJar(x, y, good, fail){
   } else if (fail === 'blow'){
     g.fillStyle='rgba(120,140,155,.2)'; g.fillRect(x-24, y-50, 48, 48);
     txt('empty', x, y-26, 12, 'rgba(210,230,240,.5)','center',400);
+  } else if (fail === 'crust' || fail === 'spray'){
+    g.fillStyle='#6a7480'; g.fillRect(x-24, y-24, 48, 22);
+    for (let i=0;i<12;i++){ g.fillStyle='rgba(255,255,255,.85)';
+      g.beginPath(); g.arc(x-20+nz(i)*40, y-24+nz(i+5)*20, 2.6, 0, 7); g.fill(); }
   } else {
     g.fillStyle='#5c6b5a'; g.fillRect(x-24, y-26, 48, 24);
     for (let i=0;i<10;i++){ g.fillStyle='rgba(180,190,175,.5)';
@@ -3269,7 +3410,7 @@ function productJar(x, y, good, fail){
   g.restore();
   g.strokeStyle='rgba(225,245,255,.6)'; g.lineWidth=2.4; rr(x-26, y-52, 52, 52, 7); g.stroke();
   g.fillStyle='#8a939a'; rr(x-14, y-60, 28, 9, 3); g.fill();
-  txt('PRODUCT', x, y+16, 11, good ? '#8fe8b8' : '#e8a0a0');
+  txt('off spec', x, y+14, 11, '#e8a0a0');
 }
 
 /* ============================================================
@@ -3287,8 +3428,9 @@ const S_sep = {
     this.ppeStage = 0;                    // 0 nothing, 1 goggles, 2 coat
     this.ppeMsg = null; this.ppeMsgT = 0; this.ppeAnim = 0;
     this.convo = null; this.reactT = 0;
-    this.scored = false;
+    this.scored = false; this.quiz = null; this.quizScore = 0;
     this.mutter = mutterFor('sep'); this.mutterT = 210;
+    this.chatT = 420; this.chatI = 0; this.chat = null;
     after(60, ()=>{ this.mode = 'free'; });
   },
   exit(){
@@ -3296,10 +3438,14 @@ const S_sep = {
       this.scored = true;
       award('sep', this.solved.filter(Boolean).length, SEP_BAYS.length);
       award('saf', this.ppeStage, 2);
+      if (isHard()) award('sep', this.quizScore || 0, 3);
       if (this.solved.every(Boolean)) G.done.sep = true;
     }
   },
   camX(){ return clamp(this.px - W/2, 0, SEP_ROOM - W); },
+  /* a feed is 'known' once it has been analysed, or once you solved that bay */
+  bayKnown(i){ return this.solved[i] || (this.bayI === i && this.inspected)
+                    || !needsInspection('sep'); },
 
   /* ---------- PPE station ---------- */
   ppeExcuses(){
@@ -3484,13 +3630,13 @@ const S_sep = {
 
       // sample sitting on the bench (it is consumed once the unit runs)
       const consumed = active && (this.phase==='run' || this.phase==='react');
-      if (!solved && !consumed) sepSample(b.sample, b.x-70, 560);
+      if (!solved && !consumed) sepSample(b.sample, b.x-70, 560, solved || this.bayKnown(i));
       else if (!solved && consumed) { /* the jar takes its place below */ }
       else {
         // solved: show the chosen unit standing proud
         const u = sepUnit(b.right);
         u.draw(b.x+96, 610, u.sc*0.9, {run:true});
-        productJar(b.x-70, 558, true, null);
+        sepProduct(b.product, b.x-70, 558, true, null);
       }
 
       // bay label
@@ -3511,7 +3657,7 @@ const S_sep = {
           buildCloud(b.x+96, 574, 74, k);
         } else {
           sepOutcome(this.fail, this.choice, b.x+96, 610, this.pk/90);
-          productJar(b.x-70, 558, this.ok, this.fail);
+          sepProduct(b.product, b.x-70, 558, this.ok, this.fail);
         }
       }
 
@@ -3574,7 +3720,15 @@ const S_sep = {
         if (keyPressed(' ','Enter','Space')) this.openBay(nearBay);
       }
       // leaving
-      if (this.px > SEP_ROOM-80 && this.solved.every(Boolean)) go(S_hub, 'fade');
+      if (this.px > SEP_ROOM-80 && this.solved.every(Boolean)){
+        if (isHard() && !G.quizDone.sep){
+          this.quiz = makeTFQuiz('sep', (correct)=>{
+            G.quizDone.sep = true; this.quizScore = correct; this.quiz = null;
+            go(S_hub, 'fade');
+          });
+          this.mode = 'quiz';
+        } else go(S_hub, 'fade');
+      }
     }
 
     if (this.ppeMsgT > 0){
@@ -3586,9 +3740,24 @@ const S_sep = {
       if (this.mutterT < 180)
         bubble(this.mutter, this.px - cam, this.py - 196, {w:300, size:17, pop:1});
     }
+    /* the running commentary, right or wrong depending on who you picked */
+    else if (this.mode === 'free' && this.ppeMsgT <= 0){
+      this.chatT -= dt;
+      if (this.chatT < 0){
+        const pool = isWeak('sep') ? SEP_CHATTER : SEP_CHATTER_OK;
+        this.chat = pool[this.chatI % pool.length]; this.chatI++;
+        this.chatT = 560;
+      }
+      if (this.chat && this.chatT > 380)
+        bubble(this.chat, this.px - cam, this.py - 196,
+               { w:330, size:17, pop:1,
+                 fill: isWeak('sep') ? 'rgba(252,250,235,.97)' : 'rgba(250,252,254,.97)',
+                 stroke: isWeak('sep') ? 'rgba(245,181,61,.9)' : 'rgba(35,166,224,.85)' });
+    }
 
     /* ================= the bay panel ================= */
     if (this.mode === 'bay') this.drawBay(cam);
+    if (this.mode === 'quiz' && this.quiz){ this.quiz.draw(); return; }
 
     /* ================= hint + hud ================= */
     if (this.mode === 'bay' && this.phase === 'pick'){
@@ -3616,12 +3785,22 @@ const S_sep = {
     SFX.click();
     this.mode='bay'; this.bayI=i; this.phase='show'; this.pk=0;
     this.choice=null; this.ok=false; this.fail=null;
+    this.inspected = false; this.inspectK = 0;
     const b = SEP_BAYS[i];
     const sk = skill('sep');
-    const lines = [{ by:hero.name, text:b.prompt, at:()=>[W/2, 300], w:420 }];
-    if (sk === 2) lines.push({ by:hero.name, text:b.strong, at:()=>[W/2, 300], w:380 });
-    if (sk === 0) lines.push({ by:hero.name, text:b.weak,   at:()=>[W/2, 300], w:380, think:true });
-    this.convo = Convo(lines, ()=>{ this.phase='pick'; this.convo=null; });
+    const at = ()=>[W/2, 300];
+    const lines = [{ by:'THE BRIEF', text:b.prompt, at, w:440, name:true }];
+    /* the first impression.  A strong engineer reads it correctly; everyone
+       else says something confident and wrong, which is the whole point. */
+    if (isStrong('sep'))       lines.push({ by:hero.name, text:b.strong, at, w:400 });
+    else if (skill('sep')===1 && !isHard())
+                               lines.push({ by:hero.name, text:b.glanceOk, at, w:400 });
+    else                       lines.push({ by:hero.name, text:b.glance, at, w:400, think:true });
+    this.convo = Convo(lines, ()=>{
+      this.convo = null;
+      this.phase = 'pick';
+      if (needsInspection('sep')) toast('You have not actually looked at it yet.');
+    });
   },
 
   drawBay(cam){
@@ -3636,37 +3815,45 @@ const S_sep = {
       g.fillStyle = sp; g.fillRect(0,0,W,H);
       g.fillStyle='rgba(35,166,224,.10)';
       g.beginPath(); g.ellipse(W/2, 312, 190, 30, 0, 0, 7); g.fill();
-      sepSample(b.sample, W/2, 300);
+      sepSample(b.sample, W/2, 300, this.inspected || !needsInspection('sep'));
       txt(b.tag, W/2, 56, 16, '#f5b53d');
       txt('reading the feed', W/2, 84, 26, '#cfe6f2','center',400);
       if (this.convo) this.convo.draw();
       return;
     }
 
+    if (this.phase === 'inspect'){ this.drawInspect(b); return; }
+
     if (this.phase === 'pick'){
+      const locked = needsInspection('sep') && !this.inspected;
+
       /* the unit tray along the bottom */
       const n = SEP_UNITS.length, tw = 196, gap = 14;
       const x0 = (W - (n*tw + (n-1)*gap))/2;
       g.fillStyle='rgba(3,14,22,.97)'; g.fillRect(0, H-208, W, 208);
       g.strokeStyle='rgba(35,166,224,.3)'; g.lineWidth=2;
       g.beginPath(); g.moveTo(0,H-208); g.lineTo(W,H-208); g.stroke();
-      txt('pick the unit and drop it on the pad', W/2, H-186, 17, '#9fd8ef','center',400);
+      txt(locked ? 'inspect the feed before you install anything'
+                 : 'pick the unit and drop it on the pad',
+          W/2, H-186, 17, locked ? '#f5b53d' : '#9fd8ef','center',400);
 
       SEP_UNITS.forEach((u,i)=>{
         const x = x0 + i*(tw+gap), y = H-168, h = 152;
-        const z = zone(x, y, tw, h);
+        const z = locked ? {hover:false, clicked:false} : zone(x, y, tw, h);
         // ghost highlight from the engineer's instincts
-        const ghostGood = (sk===2) && u.id===b.right;
-        const ghostBad  = (sk===0) && u.id===b.weakPick;
+        const ghostGood = ghostHelp('sep') && u.id===b.right;
+        const ghostBad  = (isWeak('sep') && !this.inspected) && u.id===b.weakPick;
         const hinted    = G.hintUsed['sep'] && Hint.shown>0 && u.id===b.right;
         let ring = null;
         if (ghostGood || hinted) ring = 'rgba(63,208,127,';
         else if (ghostBad) ring = 'rgba(238,95,110,';
         g.save();
+        g.globalAlpha = locked ? .35 : 1;
         if (z.hover){ g.shadowColor='#23a6e0'; g.shadowBlur=20; }
         g.fillStyle = z.hover ? 'rgba(16,58,80,.98)' : 'rgba(8,32,46,.94)';
         rr(x, z.hover?y-4:y, tw, h, 10); g.fill();
         g.restore();
+        g.save(); g.globalAlpha = locked ? .35 : 1;
         if (ring){
           g.strokeStyle = ring + (0.5 + Math.sin(T/10)*0.35) + ')'; g.lineWidth = 3.4;
         } else { g.strokeStyle = z.hover ? '#23a6e0' : 'rgba(35,166,224,.3)'; g.lineWidth = 2; }
@@ -3678,13 +3865,17 @@ const S_sep = {
         g.restore();
         txt(u.name, x+tw/2, yy+128, 17, z.hover?'#fff':'#cfe6f2');
         txt(u.sub,  x+tw/2, yy+144, 12, 'rgba(159,216,239,.7)','center',400);
+        g.restore();
         if (z.clicked) this.choose(u.id);
       });
 
       /* the brief stays on screen */
-      panel(W/2-330, 178, 660, 92, 'rgba(4,18,28,.92)', 'rgba(35,166,224,.5)');
-      txt(b.tag, W/2, 202, 14, '#f5b53d');
-      wrapText(b.prompt, W/2, 232, 600, 24, 19, '#dceaf2', 'center', 400);
+      panel(W/2-330, 166, 660, 88, 'rgba(4,18,28,.92)', 'rgba(35,166,224,.5)');
+      txt(b.tag, W/2, 188, 14, '#f5b53d');
+      wrapText(b.prompt, W/2, 218, 600, 24, 19, '#dceaf2', 'center', 400);
+
+      /* the analyser: look properly before you commit */
+      this.drawAnalyser(b, locked);
       return;
     }
 
@@ -3734,6 +3925,93 @@ const S_sep = {
         }
       }
       return;
+    }
+  },
+
+  /* the bench analyser.  Reading it is how you find out what the feed
+     really is, which matters most for the people who guessed wrong. */
+  drawAnalyser(b, locked){
+    const px = W/2 - 250, py = H-290, pw = 500, ph = 76;
+    if (!this.inspected){
+      const z = zone(px, py, pw, ph);
+      g.save();
+      if (z.hover){ g.shadowColor='#f5b53d'; g.shadowBlur=20; }
+      g.fillStyle = z.hover ? 'rgba(62,44,10,.98)' : 'rgba(26,20,8,.94)';
+      rr(px, z.hover?py-3:py, pw, ph, 12); g.fill(); g.restore();
+      g.strokeStyle = locked ? `rgba(245,181,61,${.6+Math.sin(T/10)*.35})` : 'rgba(245,181,61,.6)';
+      g.lineWidth = locked ? 3.2 : 2;
+      rr(px, z.hover?py-3:py, pw, ph, 12); g.stroke();
+      // a little instrument icon
+      g.save(); g.translate(px+44, (z.hover?py-3:py)+ph/2);
+      g.strokeStyle='#f5b53d'; g.lineWidth=3; g.lineCap='round';
+      g.beginPath(); g.arc(-2,-3, 11, 0, 7); g.stroke();
+      g.beginPath(); g.moveTo(6,5); g.lineTo(15,15); g.stroke();
+      g.restore();
+      txt('INSPECT THE FEED', px+pw/2+20, (z.hover?py-3:py)+30, 20, '#f5d78a');
+      txt('take a reading with the ' + b.probe, px+pw/2+20, (z.hover?py-3:py)+54, 14,
+          'rgba(245,215,138,.7)','center',400);
+      if (z.clicked){ this.phase='inspect'; this.inspectK=0; SFX.click(); }
+    } else {
+      panel(px, py-14, pw, ph+14, 'rgba(5,26,20,.95)', 'rgba(63,208,127,.55)');
+      txt(b.probe.toUpperCase(), px+16, py+6, 12, '#8fe8b8','left');
+      b.readout.forEach(([lab,val],i)=>{
+        const cx = px + 16 + i*(pw-32)/b.readout.length;
+        txt(lab, cx, py+32, 11, 'rgba(159,216,239,.7)','left',400);
+        txt(val, cx, py+52, 16, '#5ce8a8','left');
+      });
+    }
+  },
+
+  /* the inspection itself */
+  drawInspect(b){
+    shade(.78);
+    const sp = g.createRadialGradient(W/2, 262, 30, W/2, 262, 330);
+    sp.addColorStop(0,'rgba(245,181,61,.16)'); sp.addColorStop(1,'rgba(245,181,61,0)');
+    g.fillStyle = sp; g.fillRect(0,0,W,H);
+    sepSample(b.sample, W/2, 262, this.inspectK > 90);
+
+    this.inspectK += dt;
+    const k = clamp(this.inspectK/110, 0, 1);
+
+    /* a magnifier sweeping over the sample */
+    const mx = W/2 - 150 + Math.sin(this.inspectK/26) * 150;
+    const my = 200 + Math.cos(this.inspectK/19) * 34;
+    g.save();
+    g.strokeStyle='rgba(245,215,138,.9)'; g.lineWidth=5;
+    g.beginPath(); g.arc(mx, my, 40, 0, 7); g.stroke();
+    g.fillStyle='rgba(180,230,255,.10)'; g.beginPath(); g.arc(mx, my, 40, 0, 7); g.fill();
+    g.strokeStyle='#8a6a2a'; g.lineWidth=9; g.lineCap='round';
+    g.beginPath(); g.moveTo(mx+28, my+28); g.lineTo(mx+58, my+58); g.stroke();
+    g.restore();
+    if (Math.random() < .25) emitSpark(mx+rnd(-30,30), my+rnd(-30,30), 1, '#ffe08a');
+
+    txt(b.probe.toUpperCase(), W/2, 78, 16, '#f5b53d');
+    txt(k < 1 ? 'taking a reading...' : 'reading complete', W/2, 106, 24,
+        k < 1 ? '#cfe6f2' : '#8fe8b8', 'center', 400);
+
+    /* the numbers tick up as it reads */
+    const bw = 560, bx = W/2 - bw/2, by = 452;
+    panel(bx, by, bw, 132, 'rgba(5,20,28,.96)', 'rgba(245,181,61,.55)');
+    b.readout.forEach(([lab,val],i)=>{
+      const ry = by + 34 + i*32;
+      txt(lab, bx+22, ry, 13, 'rgba(159,216,239,.8)','left',400);
+      const rk = clamp((k - i*0.22)/0.4, 0, 1);
+      txt(rk >= 1 ? val : (rk <= 0 ? '—' : '\u2588'.repeat(1+Math.floor(rk*5))),
+          bx+bw-22, ry, 17, rk >= 1 ? '#5ce8a8' : 'rgba(92,232,168,.45)','right');
+    });
+
+    if (k >= 1){
+      if (!this.revealSaid){
+        this.revealSaid = true; SFX.good();
+        this.revealConvo = Convo([
+          { by:hero.name, text:b.reveal, at:()=>[W/2, 404], w:520 }
+        ], ()=>{ this.revealConvo = null; });
+      }
+      if (this.revealConvo) this.revealConvo.draw();
+      else if (button('GOT IT', W/2-100, H-70, 200, 44, {col:'#3fd07f', size:18})){
+        this.inspected = true; this.revealSaid = false;
+        this.phase = 'pick'; SFX.click();
+      }
     }
   },
 
