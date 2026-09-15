@@ -22,6 +22,7 @@ Click once when the title card appears so the browser lets the sound play.
 | space or enter | talk, continue, go through a door |
 | mouse | pick up, place and install equipment |
 | coffee cup | one hint per station |
+| O | walk out of a room and go back to the yard |
 | F | full screen |
 
 ## How a run goes
@@ -72,7 +73,7 @@ Click once when the title card appears so the browser lets the sound play.
 
 A booth queue does not wait, so nothing in the game traps you.
 
-* Every room has a **WALK OUT · ESC** tab in the top right. It drops you back in
+* Every room has a **WALK OUT · O** tab in the top right. It drops you back in
   the yard wherever you happen to be standing, half-built line and all.
 * Mr. Tarek waits by his office from the start. Talk to him at any point and he
   will ask whether you really want to clock off with work still open. Say yes

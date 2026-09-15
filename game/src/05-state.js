@@ -381,9 +381,9 @@ function bailTab(){
   rr(x, y, w, h, 8); g.fill();
   g.strokeStyle = z.hover ? '#ee5f6e' : 'rgba(190,200,210,.35)';
   g.lineWidth = z.hover ? 2.4 : 1.6; rr(x, y, w, h, 8); g.stroke();
-  txt('WALK OUT  ·  ESC', x + w/2, y + h/2 + 5, 14,
+  txt('WALK OUT  ·  O', x + w/2, y + h/2 + 5, 14,
       z.hover ? '#ffd0d4' : 'rgba(210,220,230,.7)');
-  return z.clicked || keyPressed('Escape');
+  return z.clicked || keyPressed('o', 'O', 'KeyO');
 }
 /* leave a station wherever you happen to be standing in it */
 function bailOut(station){
