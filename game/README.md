@@ -21,7 +21,7 @@ Click once when the title card appears so the browser lets the sound play.
 | arrow keys or WASD | walk |
 | space or enter | talk, continue, go through a door |
 | mouse | pick up, place and install equipment |
-| coffee cup | one hint per station |
+| coffee cup | a hint, as many times as you like. It rings the next thing to do |
 | O | walk out of a room and go back to the yard |
 | F | full screen |
 
@@ -36,10 +36,15 @@ Click once when the title card appears so the browser lets the sound play.
      lose the green target markings, and have to inspect a feed before the game lets them commit
    * **safety** — a careless engineer argues with the PPE locker three times before putting the goggles on
 
+   Stuck at any point? Drink the coffee. It reads the room you are actually in
+   and tells you the next thing to do, then puts a gold ring and a label on it —
+   the PPE locker, the sample still waiting, the loose flange, the skid that can
+   hurt somebody, the door. The pot is bottomless and costs nothing.
+
    The fourth card, **Jojo Tarek, the boss's cousin**, is hard mode. He is bad at
    everything, turned up in a floral shirt and sandals, and was hired because of
    his uncle. Picking him changes the game:
-   * no coffee hints anywhere
+   * no coffee, no hints, no rings. Jojo is on his own
    * no green target bands on the power slider or the cooling duty
    * every feed has to be analysed before you may install anything
    * a completely different opening conversation with the boss, which

@@ -833,19 +833,45 @@ const S_sep = {
     if (this.mode === 'quiz' && this.quiz){ this.quiz.draw(); return; }
 
     /* ================= hint + hud ================= */
-    if (this.mode === 'bay' && this.phase === 'pick'){
-      const b = SEP_BAYS[this.bayI];
-      if (Hint.draw(76, 150, 210, 250)) Hint.use(b.hint);
-    } else if (this.mode !== 'bay') {
-      if (Hint.draw(76, 150, 210, 250))
-        Hint.use('Read what the feed actually is. Solid or liquid, gas or not, and what you were handed to work with.');
-    }
+    if (Hint.draw(76, 150, 210, 250)) Hint.use(...this.hintFor(cam));
+    Hint.drawMark();
 
     vignette(.34);
     const n = this.solved.filter(Boolean).length;
 
     hudEl.textContent = `Separation Techniques Lab   ·   samples ${n}/${SEP_BAYS.length}` +
       (this.ppeStage<2 ? '   ·   PPE not worn' : '   ·   PPE on');
+  },
+
+  /* the coffee tells you what to do next, and rings the thing to do it to */
+  hintFor(cam){
+    if (this.ppeStage < 2)
+      return ['Goggles and a coat before anything else. The locker is right there.',
+              170 - cam, 520, 'PPE LOCKER'];
+
+    if (this.mode === 'bay'){
+      const b = SEP_BAYS[this.bayI];
+      if (this.phase === 'show')
+        return ['Look at what is actually in the beaker before you agree with yourself.'];
+      if (this.phase === 'inspect')
+        return ['The reading is coming up. Read it, do not guess it.'];
+      if (this.phase === 'pick'){
+        if (needsInspection('sep') && !this.inspected)
+          return ['You do not know what this is yet. Take a reading first.',
+                  W/2, H-252, 'INSPECT'];
+        return [b.hint];
+      }
+      return ['Watch what it does. That tells you whether it was the right unit.'];
+    }
+
+    const next = this.solved.findIndex((v,i) => !v && !this.leftBad[i]);
+    if (next >= 0){
+      const b = SEP_BAYS[next];
+      return [b.tag + ' is still waiting. Walk up to it and press space.',
+              b.x - cam, 470, b.tag];
+    }
+    return ['Every sample is dealt with. The door is at the far right.',
+            SEP_ROOM - 72 - cam, 500, 'EXIT'];
   },
 
   promptAt(sx, label, col){

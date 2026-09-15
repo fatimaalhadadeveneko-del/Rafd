@@ -123,21 +123,56 @@ function mutterFor(k){ return isHard() ? HARD_MUTTER[k] : MUTTER[k][skill(k)]; }
 
 /* ---------------- coffee hint ---------------- */
 const Hint = {
-  station:null, shown:0, text:'',
-  begin(station){ this.station = station; this.shown = 0; this.text=''; },
-  /* hard mode has no coffee, no hints, no mercy */
+  station:null, shown:0, text:'', cool:0, mark:null, sips:0,
+  begin(station){ this.station = station; this.shown = 0; this.text=''; this.cool=0;
+                  this.mark=null; this.sips=0; },
+  /* hard mode has no coffee, no hints, no mercy.  Everyone else gets the pot. */
   offered(){ return !isHard(); },
-  available(){ return !isHard() && !G.hintUsed[this.station]; },
-  use(text){
+  available(){ return !isHard() && this.cool <= 0; },
+  /* text, and optionally a point on screen to put a ring around */
+  use(text, mx, my, label){
     if (!this.available()) return false;
     G.hintUsed[this.station] = true;
-    this.text = text; this.shown = 300;
-    SFX.pickup(); toast('Coffee. Suddenly things are clearer.');
+    this.sips++;
+    this.text = text; this.shown = 320; this.cool = 60;
+    this.mark = (mx === undefined) ? null : { x:mx, y:my, label:label || 'HERE', t:0 };
+    SFX.pickup();
+    toast(this.sips === 1 ? 'Coffee. Suddenly things are clearer.'
+        : this.sips < 4   ? 'Another coffee. Still free.'
+        : this.sips < 8   ? 'That is a lot of coffee.'
+                          : 'The pot is bottomless. Your hands are not steady.');
     return true;
+  },
+  /* the ring that says go here, drawn over the room by the scene that asked for it */
+  drawMark(){
+    if (!this.mark || this.shown <= 0) return;
+    const m = this.mark; m.t += dt;
+    const pulse = (m.t % 52) / 52;
+    g.save();
+    g.strokeStyle = `rgba(245,181,61,${0.9 * (1 - pulse)})`;
+    g.lineWidth = 5;
+    g.beginPath(); g.arc(m.x, m.y, 26 + pulse * 46, 0, 7); g.stroke();
+    g.strokeStyle = `rgba(245,181,61,${0.55 + Math.sin(T/8) * 0.35})`;
+    g.lineWidth = 3.4;
+    g.beginPath(); g.arc(m.x, m.y, 26, 0, 7); g.stroke();
+    // an arrow above it, bobbing
+    const ay = m.y - 52 + Math.sin(T/9) * 5;
+    g.fillStyle = '#f5b53d';
+    g.beginPath(); g.moveTo(m.x, ay + 18); g.lineTo(m.x - 13, ay);
+    g.lineTo(m.x + 13, ay); g.closePath(); g.fill();
+    if (m.label){
+      const lw = 18 + m.label.length * 7.4;
+      g.fillStyle = 'rgba(10,8,4,.9)'; rr(m.x - lw/2, ay - 30, lw, 22, 6); g.fill();
+      g.strokeStyle = 'rgba(245,181,61,.7)'; g.lineWidth = 1.8;
+      rr(m.x - lw/2, ay - 30, lw, 22, 6); g.stroke();
+      txt(m.label, m.x, ay - 19, 13, '#f5cf8a');
+    }
+    g.restore();
   },
   /* draw the coffee cup button + the thought bubble */
   draw(x, y, anchorX, anchorY){
     if (!this.offered()) return false;
+    if (this.cool > 0) this.cool -= dt;
     if (this.shown > 0){
       this.shown -= dt;
       thought(this.text, anchorX, anchorY, { w:280, size:17, reveal:1e9 });
@@ -145,7 +180,7 @@ const Hint = {
     const avail = this.available();
     const z = zone(x-26, y-30, 52, 58);
     g.save();
-    g.globalAlpha = avail ? 1 : .35;
+    g.globalAlpha = avail ? 1 : .45;
     if (z.hover && avail){ g.shadowColor='#f5b53d'; g.shadowBlur=18; }
     // saucer + mug
     g.fillStyle='#e8eef2'; g.beginPath(); g.ellipse(x,y+18,24,7,0,0,7); g.fill();
@@ -158,7 +193,7 @@ const Hint = {
     if (avail){
       if (Math.random()<.14) emitSteam(x, y-14, 1, {speed:.5, col:'rgba(210,190,170,.5)'});
       txt('HINT', x, y+32, 11, z.hover?'#f5b53d':'rgba(245,181,61,.65)');
-    } else txt('USED', x, y+32, 11, 'rgba(200,215,225,.3)');
+    } else txt('...', x, y+32, 13, 'rgba(200,215,225,.4)');
     return z.clicked && avail;
   }
 };

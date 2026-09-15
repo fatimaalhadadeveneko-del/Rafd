@@ -439,12 +439,48 @@ const S_hea = {
     if (this.mutterT>0 && this.mode==='free'){ this.mutterT -= dt;
       if (this.mutterT<180) bubble(this.mutter, this.px, this.py-196, {w:300,size:17,pop:1}); }
 
-    if (Hint.draw(76, 150, 210, 250))
-      Hint.use('Treat the dangerous one first. A cold line is a nuisance. A runaway hot one is a hazard.');
+    if (Hint.draw(76, 150, 210, 250)) Hint.use(...this.hintFor());
+    Hint.drawMark();
 
     vignette(.4);
     hudEl.textContent = 'Thermal Exchange Hall   ·   ' +
       this.st.filter(s=>s.ok).length + '/2 skids steady';
+  },
+
+  hintFor(){
+    if (this.mode === 'plant'){
+      const p = HEA_PLANTS[this.pi];
+      return [p.need === 'cool'
+        ? 'That skid is making more heat than it can lose. Take heat out of it.'
+        : 'That skid is losing more heat than it makes. Put heat back in.'];
+    }
+    if (this.mode === 'fail')
+      return ['Take it off and try the other one. Nothing here is permanent.'];
+    if (this.mode === 'path'){
+      const i = HEA_PATH.findIndex((p,k) => this.pathAns[k] !== p.right);
+      if (i >= 0) return ['Section ' + (i+1) + ': ask what is between the two sides. ' +
+                          'Solid means conduction, moving fluid means convection, ' +
+                          'nothing at all means radiation.'];
+      return ['All four right. Go and trim the cooler.'];
+    }
+    if (this.mode === 'trim')
+      return ['Steady means the needle stops drifting, not that it reads low. ' +
+              'Nudge it and wait before you nudge it again.'];
+
+    // out on the floor
+    const hot = this.st.findIndex((s,i) => !s.ok && !s.leftBad && HEA_PLANTS[i].danger === 'high');
+    if (hot >= 0)
+      return ['SKID A is the one that can hurt somebody. Deal with it first.',
+              HEA_PLANTS[hot].x, 340, HEA_PLANTS[hot].name];
+    const any = this.st.findIndex(s => !s.ok && !s.leftBad);
+    if (any >= 0)
+      return [HEA_PLANTS[any].name + ' is still drifting. Walk up to it and press space.',
+              HEA_PLANTS[any].x, 340, HEA_PLANTS[any].name];
+    if (!this.pathDone)
+      return ['Both skids are settled. Read the analyser in the middle of the hall.',
+              HEA_KIOSK, 400, 'ANALYSER'];
+    return ['Back to the trim. Hold Skid A at steady state.',
+            HEA_KIOSK, 400, 'ANALYSER'];
   },
 
   openPlant(i){ SFX.click(); this.mode='plant'; this.pi=i; },
@@ -638,6 +674,8 @@ const S_hea = {
         }
       }
     }
+    if (Hint.draw(96, 640, 230, 560)) Hint.use(...this.hintFor());
+    Hint.drawMark();
     hudEl.textContent = 'Thermal Exchange Hall   ·   heat path ' +
       this.pathAns.filter(a=>a!==null).length + '/4';
   },
@@ -706,6 +744,9 @@ const S_hea = {
     if (good) this.holdT = (this.holdT||0) + dt; else this.holdT = 0;
     g.fillStyle='rgba(63,208,127,.25)';
     g.fillRect(W/2-120, 678, 240*clamp((this.holdT||0)/(isHard()?140:90),0,1), 6);
+
+    if (Hint.draw(76, 150, 210, 250)) Hint.use(...this.hintFor());
+    Hint.drawMark();
 
     if ((this.holdT||0) > (isHard() ? 140 : 90) && !this.trimDone){
       this.trimDone = true; this.pts += 1; SFX.great();

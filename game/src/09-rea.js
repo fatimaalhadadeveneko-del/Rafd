@@ -449,19 +449,47 @@ const S_rea = {
     if (this.mode==='client') this.drawClient(cam);
     if (this.mode==='quiz' && this.quiz){ this.quiz.draw(); return; }
 
-    if (this.mode==='client' && this.phase==='ask'){
-      const c = REA_CLIENTS[this.ci];
-      if (Hint.draw(1198, 128, 1064, 238))
-        Hint.use('Three questions. Is it new, does it heat up or cool down, and how much do they need.');
-    } else if (this.mode!=='client'){
-      if (Hint.draw(76, 150, 210, 250))
-        Hint.use('Ask all three questions before you order. The answers are the spec.');
-    }
+    if (Hint.draw(this.mode==='client' ? 1198 : 76, 150,
+                  this.mode==='client' ? 1064 : 210, 250))
+      Hint.use(...this.hintFor(cam));
+    Hint.drawMark();
 
     vignette(.38);
     const n = this.solved.filter(Boolean).length;
 
     hudEl.textContent = `Reactor Design Lab   ·   clients ${n}/3   ·   correct calls ${this.pts}/9`;
+  },
+
+  /* what the coffee tells you to do next in here */
+  hintFor(cam){
+    if (this.mode === 'client'){
+      const c = REA_CLIENTS[this.ci];
+      if (this.phase === 'intro')
+        return ['Let her finish. Then ask her the three questions.'];
+      if (this.phase === 'ask'){
+        const left = c.asks.filter(a => !this.asked[a.key]);
+        if (left.length)
+          return ['Still ' + left.length + (left.length===1?' question':' questions') +
+                  ' unasked. Is it new, does it heat up or cool down, and how much do they need.'];
+        return ['You have the whole spec. Get your phone out and order it.'];
+      }
+      if (this.phase === 'phone'){
+        if (!this.sel.type)  return ['Reactor type first. Batch for small and awkward, packed for steady and catalytic, membrane when a product has to be taken out as it forms.'];
+        if (!this.sel.therm) return ['Now the jacket. Something that makes heat needs cooling. Something that needs heat needs a jacket that gives it.'];
+        if (!this.sel.scale) return ['Last, the rate. Match it to how much they actually asked for.'];
+        return ['All three chosen. Place the order and watch what comes out.'];
+      }
+      return ['Watch the three ticks at the bottom. They tell you which call was wrong.'];
+    }
+
+    const next = this.solved.findIndex(v => !v);
+    if (next >= 0){
+      const c = REA_CLIENTS[next];
+      return [NPCS[c.npc].name + ' is still waiting. Walk over and press space.',
+              c.x - cam, 460, NPCS[c.npc].name.toUpperCase()];
+    }
+    return ['All three dealt with. The exit is at the far right.',
+            REA_ROOM - 64 - cam, 500, 'EXIT'];
   },
 
   openClient(i){

@@ -431,8 +431,8 @@ const S_flu = {
     if (this.mutterT>0){ this.mutterT -= dt;
       if (this.mutterT<180) bubble(this.mutter, this.px-cam, this.py-196, {w:300,size:17,pop:1}); }
 
-    if (Hint.draw(76, 150, 210, 250))
-      Hint.use('A gas needs a compressor. A liquid needs a pump. Fit the relief valve before you pressurise anything.');
+    if (Hint.draw(76, 150, 210, 250)) Hint.use(...this.hintFloor(cam));
+    Hint.drawMark();
 
     vignette(.34);
     const n = this.rigs.filter(r=>r.done).length;
@@ -443,6 +443,63 @@ const S_flu = {
   prompt(sx, label, col){
     panel(sx-160, 176, 320, 42, 'rgba(5,22,33,.96)', col, 10);
     txt(label, sx, 198, 16, '#eaf4fa');
+  },
+
+  /* out on the bay floor: what is left to do, and where it is */
+  hintFloor(cam){
+    if (!G.sheet)
+      return ['The Reynolds sheet is on that table. You will want it later.',
+              245 - cam, 560, 'SHEET'];
+    const next = this.rigs.findIndex(r => !r.done);
+    if (next >= 0){
+      const r = FLU_RIGS[next];
+      return [r.title.split('·')[0].trim() + ' is still dead. Walk up to it and press space.',
+              r.x - cam, 470, r.title.split('·')[0].trim()];
+    }
+    return ['Both lines are dealt with. The door is at the far right.',
+            FLU_ROOM - 60 - cam, 520, 'EXIT'];
+  },
+
+  /* inside a rig: the next thing to click, ringed */
+  hintRig(){
+    const rig = FLU_RIGS[this.ri], st = this.rigs[this.ri];
+    if (st.phase === 'choose')
+      return [rig.fluid === 'gas'
+        ? 'Gas is compressible. The machine that moves it is named after that.'
+        : 'Water will not compress. It has to be pushed, not squeezed.'];
+
+    if (st.phase === 'run'){
+      if (!st.moverOK)
+        return ['That machine cannot move this fluid. Swap it — nothing you built is lost.',
+                180, H-50, 'SWAP'];
+      if (st.power < 0.55) return ['More power. Watch the flow, not the slider.'];
+      if (st.power > 0.82) return ['Too much. You are lifting the relief valve. Back it off.'];
+      return ['That is the band. Hold it there and read the Reynolds number.'];
+    }
+
+    if (st.phase === 're')
+      return ['Compare the number on screen with the ranges on your sheet, then tick the row.'];
+
+    // build
+    const p = st.placed.findIndex(v => !v);
+    if (p >= 0){
+      const sg = PIPE_SEGS[p];
+      return ['The line is still open. Click the gap to drop a pipe in.',
+              (sg.a[0] + sg.end[0]) / 2, (sg.a[1] + sg.end[1]) / 2, 'PIPE'];
+    }
+    const b = st.bolted.findIndex(v => !v);
+    if (b >= 0)
+      return ['Pipes are in, but that flange is loose. Click the ring to bolt it.',
+              JOINTS[b].p[0], JOINTS[b].p[1], 'BOLT'];
+    if (!st.relief)
+      return ['Nothing on this line will stop it over-pressurising. Fit the relief valve.',
+              RELIEF_PAD[0], RELIEF_PAD[1] - 34, 'RELIEF'];
+    if (!st.mover)
+      return ['The pad is empty. Put something on it that can actually move ' +
+              (rig.fluid === 'gas' ? 'gas' : 'water') + '.',
+              MOVER_PAD[0], MOVER_PAD[1], 'PAD'];
+    return ['Everything is fitted. Start the line and ramp the power.',
+            W/2, H-48, 'START'];
   },
 
   openRig(i){
@@ -695,18 +752,22 @@ const S_flu = {
           'center', 400);
 
       if (!st.moverOK){
-        if (button('SWAP THE MACHINE', 40, H-72, 250, 44, {col:'#ee5f6e', size:16})){
+        /* putting it right is the big one, on the left, where your hand already is */
+        if (button('SWAP THE MACHINE', 40, H-72, 280, 44, {col:'#3fd07f', size:17})){
           st.phase='choose'; st.power=0; st.flow=0;
         }
-        /* or shrug and hand the line over as it is */
-        if (button(leaveLabel('flu'), 304, H-72, 250, 44, {col:'#8a7a5a', size:15})){
+        /* or shrug and hand the line over as it is, kept well away from the retry */
+        if (button(leaveLabel('flu'), W-300, H-72, 260, 44, {col:'#8a7a5a', size:15})){
           noteFault('flu');
           st.leftBad = true;
           toast(leaveBlurb('flu'));
           this.finishRig();
         }
+        txt('nothing is lost by swapping it. The pipes stay where they are.',
+            W/2, H-50, 14, 'rgba(159,216,239,.65)');
       }
-      if (button('STOP', W-190, H-72, 150, 44, {size:16})){ st.phase='build'; st.power=0; st.flow=0; }
+      if (button('STOP', st.moverOK ? W-190 : W/2-75, H-72, 150, 44, {size:16})){
+        st.phase='build'; st.power=0; st.flow=0; }
     }
 
     /* --- phase: tick the Reynolds box --- */
@@ -774,13 +835,12 @@ const S_flu = {
       wrapText(this.note, cx + 24, cy + 29, cw - 48, 21, 17, '#dceaf2', 'left', 400);
     }
 
-    if (Hint.draw(W-80, 150, W-220, 250))
-      Hint.use(rig.fluid==='gas'
-        ? 'Gas is compressible. The machine that moves it is named after that.'
-        : 'Water will not compress. It has to be pushed, not squeezed.');
+    if (Hint.draw(W-80, 150, W-220, 250)) Hint.use(...this.hintRig());
+    Hint.drawMark();
 
-    if (st.phase === 'build' && button('LEAVE THE RIG', 40, H-72, 200, 44, {size:16})){
-      this.mode='free';
+    if (st.phase === 'build'){
+      if (button('STEP AWAY', W-230, H-72, 190, 44, {size:16})) this.mode='free';
+      txt('the rig keeps what you built', W-135, H-20, 12, 'rgba(159,216,239,.55)');
     }
 
     hudEl.textContent = rig.title + '   ·   ' +

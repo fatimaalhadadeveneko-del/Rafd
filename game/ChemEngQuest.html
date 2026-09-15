@@ -2011,21 +2011,56 @@ function mutterFor(k){ return isHard() ? HARD_MUTTER[k] : MUTTER[k][skill(k)]; }
 
 /* ---------------- coffee hint ---------------- */
 const Hint = {
-  station:null, shown:0, text:'',
-  begin(station){ this.station = station; this.shown = 0; this.text=''; },
-  /* hard mode has no coffee, no hints, no mercy */
+  station:null, shown:0, text:'', cool:0, mark:null, sips:0,
+  begin(station){ this.station = station; this.shown = 0; this.text=''; this.cool=0;
+                  this.mark=null; this.sips=0; },
+  /* hard mode has no coffee, no hints, no mercy.  Everyone else gets the pot. */
   offered(){ return !isHard(); },
-  available(){ return !isHard() && !G.hintUsed[this.station]; },
-  use(text){
+  available(){ return !isHard() && this.cool <= 0; },
+  /* text, and optionally a point on screen to put a ring around */
+  use(text, mx, my, label){
     if (!this.available()) return false;
     G.hintUsed[this.station] = true;
-    this.text = text; this.shown = 300;
-    SFX.pickup(); toast('Coffee. Suddenly things are clearer.');
+    this.sips++;
+    this.text = text; this.shown = 320; this.cool = 60;
+    this.mark = (mx === undefined) ? null : { x:mx, y:my, label:label || 'HERE', t:0 };
+    SFX.pickup();
+    toast(this.sips === 1 ? 'Coffee. Suddenly things are clearer.'
+        : this.sips < 4   ? 'Another coffee. Still free.'
+        : this.sips < 8   ? 'That is a lot of coffee.'
+                          : 'The pot is bottomless. Your hands are not steady.');
     return true;
+  },
+  /* the ring that says go here, drawn over the room by the scene that asked for it */
+  drawMark(){
+    if (!this.mark || this.shown <= 0) return;
+    const m = this.mark; m.t += dt;
+    const pulse = (m.t % 52) / 52;
+    g.save();
+    g.strokeStyle = `rgba(245,181,61,${0.9 * (1 - pulse)})`;
+    g.lineWidth = 5;
+    g.beginPath(); g.arc(m.x, m.y, 26 + pulse * 46, 0, 7); g.stroke();
+    g.strokeStyle = `rgba(245,181,61,${0.55 + Math.sin(T/8) * 0.35})`;
+    g.lineWidth = 3.4;
+    g.beginPath(); g.arc(m.x, m.y, 26, 0, 7); g.stroke();
+    // an arrow above it, bobbing
+    const ay = m.y - 52 + Math.sin(T/9) * 5;
+    g.fillStyle = '#f5b53d';
+    g.beginPath(); g.moveTo(m.x, ay + 18); g.lineTo(m.x - 13, ay);
+    g.lineTo(m.x + 13, ay); g.closePath(); g.fill();
+    if (m.label){
+      const lw = 18 + m.label.length * 7.4;
+      g.fillStyle = 'rgba(10,8,4,.9)'; rr(m.x - lw/2, ay - 30, lw, 22, 6); g.fill();
+      g.strokeStyle = 'rgba(245,181,61,.7)'; g.lineWidth = 1.8;
+      rr(m.x - lw/2, ay - 30, lw, 22, 6); g.stroke();
+      txt(m.label, m.x, ay - 19, 13, '#f5cf8a');
+    }
+    g.restore();
   },
   /* draw the coffee cup button + the thought bubble */
   draw(x, y, anchorX, anchorY){
     if (!this.offered()) return false;
+    if (this.cool > 0) this.cool -= dt;
     if (this.shown > 0){
       this.shown -= dt;
       thought(this.text, anchorX, anchorY, { w:280, size:17, reveal:1e9 });
@@ -2033,7 +2068,7 @@ const Hint = {
     const avail = this.available();
     const z = zone(x-26, y-30, 52, 58);
     g.save();
-    g.globalAlpha = avail ? 1 : .35;
+    g.globalAlpha = avail ? 1 : .45;
     if (z.hover && avail){ g.shadowColor='#f5b53d'; g.shadowBlur=18; }
     // saucer + mug
     g.fillStyle='#e8eef2'; g.beginPath(); g.ellipse(x,y+18,24,7,0,0,7); g.fill();
@@ -2046,7 +2081,7 @@ const Hint = {
     if (avail){
       if (Math.random()<.14) emitSteam(x, y-14, 1, {speed:.5, col:'rgba(210,190,170,.5)'});
       txt('HINT', x, y+32, 11, z.hover?'#f5b53d':'rgba(245,181,61,.65)');
-    } else txt('USED', x, y+32, 11, 'rgba(200,215,225,.3)');
+    } else txt('...', x, y+32, 13, 'rgba(200,215,225,.4)');
     return z.clicked && avail;
   }
 };
@@ -4036,19 +4071,45 @@ const S_sep = {
     if (this.mode === 'quiz' && this.quiz){ this.quiz.draw(); return; }
 
     /* ================= hint + hud ================= */
-    if (this.mode === 'bay' && this.phase === 'pick'){
-      const b = SEP_BAYS[this.bayI];
-      if (Hint.draw(76, 150, 210, 250)) Hint.use(b.hint);
-    } else if (this.mode !== 'bay') {
-      if (Hint.draw(76, 150, 210, 250))
-        Hint.use('Read what the feed actually is. Solid or liquid, gas or not, and what you were handed to work with.');
-    }
+    if (Hint.draw(76, 150, 210, 250)) Hint.use(...this.hintFor(cam));
+    Hint.drawMark();
 
     vignette(.34);
     const n = this.solved.filter(Boolean).length;
 
     hudEl.textContent = `Separation Techniques Lab   ·   samples ${n}/${SEP_BAYS.length}` +
       (this.ppeStage<2 ? '   ·   PPE not worn' : '   ·   PPE on');
+  },
+
+  /* the coffee tells you what to do next, and rings the thing to do it to */
+  hintFor(cam){
+    if (this.ppeStage < 2)
+      return ['Goggles and a coat before anything else. The locker is right there.',
+              170 - cam, 520, 'PPE LOCKER'];
+
+    if (this.mode === 'bay'){
+      const b = SEP_BAYS[this.bayI];
+      if (this.phase === 'show')
+        return ['Look at what is actually in the beaker before you agree with yourself.'];
+      if (this.phase === 'inspect')
+        return ['The reading is coming up. Read it, do not guess it.'];
+      if (this.phase === 'pick'){
+        if (needsInspection('sep') && !this.inspected)
+          return ['You do not know what this is yet. Take a reading first.',
+                  W/2, H-252, 'INSPECT'];
+        return [b.hint];
+      }
+      return ['Watch what it does. That tells you whether it was the right unit.'];
+    }
+
+    const next = this.solved.findIndex((v,i) => !v && !this.leftBad[i]);
+    if (next >= 0){
+      const b = SEP_BAYS[next];
+      return [b.tag + ' is still waiting. Walk up to it and press space.',
+              b.x - cam, 470, b.tag];
+    }
+    return ['Every sample is dealt with. The door is at the far right.',
+            SEP_ROOM - 72 - cam, 500, 'EXIT'];
   },
 
   promptAt(sx, label, col){
@@ -4769,19 +4830,47 @@ const S_rea = {
     if (this.mode==='client') this.drawClient(cam);
     if (this.mode==='quiz' && this.quiz){ this.quiz.draw(); return; }
 
-    if (this.mode==='client' && this.phase==='ask'){
-      const c = REA_CLIENTS[this.ci];
-      if (Hint.draw(1198, 128, 1064, 238))
-        Hint.use('Three questions. Is it new, does it heat up or cool down, and how much do they need.');
-    } else if (this.mode!=='client'){
-      if (Hint.draw(76, 150, 210, 250))
-        Hint.use('Ask all three questions before you order. The answers are the spec.');
-    }
+    if (Hint.draw(this.mode==='client' ? 1198 : 76, 150,
+                  this.mode==='client' ? 1064 : 210, 250))
+      Hint.use(...this.hintFor(cam));
+    Hint.drawMark();
 
     vignette(.38);
     const n = this.solved.filter(Boolean).length;
 
     hudEl.textContent = `Reactor Design Lab   ·   clients ${n}/3   ·   correct calls ${this.pts}/9`;
+  },
+
+  /* what the coffee tells you to do next in here */
+  hintFor(cam){
+    if (this.mode === 'client'){
+      const c = REA_CLIENTS[this.ci];
+      if (this.phase === 'intro')
+        return ['Let her finish. Then ask her the three questions.'];
+      if (this.phase === 'ask'){
+        const left = c.asks.filter(a => !this.asked[a.key]);
+        if (left.length)
+          return ['Still ' + left.length + (left.length===1?' question':' questions') +
+                  ' unasked. Is it new, does it heat up or cool down, and how much do they need.'];
+        return ['You have the whole spec. Get your phone out and order it.'];
+      }
+      if (this.phase === 'phone'){
+        if (!this.sel.type)  return ['Reactor type first. Batch for small and awkward, packed for steady and catalytic, membrane when a product has to be taken out as it forms.'];
+        if (!this.sel.therm) return ['Now the jacket. Something that makes heat needs cooling. Something that needs heat needs a jacket that gives it.'];
+        if (!this.sel.scale) return ['Last, the rate. Match it to how much they actually asked for.'];
+        return ['All three chosen. Place the order and watch what comes out.'];
+      }
+      return ['Watch the three ticks at the bottom. They tell you which call was wrong.'];
+    }
+
+    const next = this.solved.findIndex(v => !v);
+    if (next >= 0){
+      const c = REA_CLIENTS[next];
+      return [NPCS[c.npc].name + ' is still waiting. Walk over and press space.',
+              c.x - cam, 460, NPCS[c.npc].name.toUpperCase()];
+    }
+    return ['All three dealt with. The exit is at the far right.',
+            REA_ROOM - 64 - cam, 500, 'EXIT'];
   },
 
   openClient(i){
@@ -5463,8 +5552,8 @@ const S_flu = {
     if (this.mutterT>0){ this.mutterT -= dt;
       if (this.mutterT<180) bubble(this.mutter, this.px-cam, this.py-196, {w:300,size:17,pop:1}); }
 
-    if (Hint.draw(76, 150, 210, 250))
-      Hint.use('A gas needs a compressor. A liquid needs a pump. Fit the relief valve before you pressurise anything.');
+    if (Hint.draw(76, 150, 210, 250)) Hint.use(...this.hintFloor(cam));
+    Hint.drawMark();
 
     vignette(.34);
     const n = this.rigs.filter(r=>r.done).length;
@@ -5475,6 +5564,63 @@ const S_flu = {
   prompt(sx, label, col){
     panel(sx-160, 176, 320, 42, 'rgba(5,22,33,.96)', col, 10);
     txt(label, sx, 198, 16, '#eaf4fa');
+  },
+
+  /* out on the bay floor: what is left to do, and where it is */
+  hintFloor(cam){
+    if (!G.sheet)
+      return ['The Reynolds sheet is on that table. You will want it later.',
+              245 - cam, 560, 'SHEET'];
+    const next = this.rigs.findIndex(r => !r.done);
+    if (next >= 0){
+      const r = FLU_RIGS[next];
+      return [r.title.split('·')[0].trim() + ' is still dead. Walk up to it and press space.',
+              r.x - cam, 470, r.title.split('·')[0].trim()];
+    }
+    return ['Both lines are dealt with. The door is at the far right.',
+            FLU_ROOM - 60 - cam, 520, 'EXIT'];
+  },
+
+  /* inside a rig: the next thing to click, ringed */
+  hintRig(){
+    const rig = FLU_RIGS[this.ri], st = this.rigs[this.ri];
+    if (st.phase === 'choose')
+      return [rig.fluid === 'gas'
+        ? 'Gas is compressible. The machine that moves it is named after that.'
+        : 'Water will not compress. It has to be pushed, not squeezed.'];
+
+    if (st.phase === 'run'){
+      if (!st.moverOK)
+        return ['That machine cannot move this fluid. Swap it — nothing you built is lost.',
+                180, H-50, 'SWAP'];
+      if (st.power < 0.55) return ['More power. Watch the flow, not the slider.'];
+      if (st.power > 0.82) return ['Too much. You are lifting the relief valve. Back it off.'];
+      return ['That is the band. Hold it there and read the Reynolds number.'];
+    }
+
+    if (st.phase === 're')
+      return ['Compare the number on screen with the ranges on your sheet, then tick the row.'];
+
+    // build
+    const p = st.placed.findIndex(v => !v);
+    if (p >= 0){
+      const sg = PIPE_SEGS[p];
+      return ['The line is still open. Click the gap to drop a pipe in.',
+              (sg.a[0] + sg.end[0]) / 2, (sg.a[1] + sg.end[1]) / 2, 'PIPE'];
+    }
+    const b = st.bolted.findIndex(v => !v);
+    if (b >= 0)
+      return ['Pipes are in, but that flange is loose. Click the ring to bolt it.',
+              JOINTS[b].p[0], JOINTS[b].p[1], 'BOLT'];
+    if (!st.relief)
+      return ['Nothing on this line will stop it over-pressurising. Fit the relief valve.',
+              RELIEF_PAD[0], RELIEF_PAD[1] - 34, 'RELIEF'];
+    if (!st.mover)
+      return ['The pad is empty. Put something on it that can actually move ' +
+              (rig.fluid === 'gas' ? 'gas' : 'water') + '.',
+              MOVER_PAD[0], MOVER_PAD[1], 'PAD'];
+    return ['Everything is fitted. Start the line and ramp the power.',
+            W/2, H-48, 'START'];
   },
 
   openRig(i){
@@ -5727,18 +5873,22 @@ const S_flu = {
           'center', 400);
 
       if (!st.moverOK){
-        if (button('SWAP THE MACHINE', 40, H-72, 250, 44, {col:'#ee5f6e', size:16})){
+        /* putting it right is the big one, on the left, where your hand already is */
+        if (button('SWAP THE MACHINE', 40, H-72, 280, 44, {col:'#3fd07f', size:17})){
           st.phase='choose'; st.power=0; st.flow=0;
         }
-        /* or shrug and hand the line over as it is */
-        if (button(leaveLabel('flu'), 304, H-72, 250, 44, {col:'#8a7a5a', size:15})){
+        /* or shrug and hand the line over as it is, kept well away from the retry */
+        if (button(leaveLabel('flu'), W-300, H-72, 260, 44, {col:'#8a7a5a', size:15})){
           noteFault('flu');
           st.leftBad = true;
           toast(leaveBlurb('flu'));
           this.finishRig();
         }
+        txt('nothing is lost by swapping it. The pipes stay where they are.',
+            W/2, H-50, 14, 'rgba(159,216,239,.65)');
       }
-      if (button('STOP', W-190, H-72, 150, 44, {size:16})){ st.phase='build'; st.power=0; st.flow=0; }
+      if (button('STOP', st.moverOK ? W-190 : W/2-75, H-72, 150, 44, {size:16})){
+        st.phase='build'; st.power=0; st.flow=0; }
     }
 
     /* --- phase: tick the Reynolds box --- */
@@ -5806,13 +5956,12 @@ const S_flu = {
       wrapText(this.note, cx + 24, cy + 29, cw - 48, 21, 17, '#dceaf2', 'left', 400);
     }
 
-    if (Hint.draw(W-80, 150, W-220, 250))
-      Hint.use(rig.fluid==='gas'
-        ? 'Gas is compressible. The machine that moves it is named after that.'
-        : 'Water will not compress. It has to be pushed, not squeezed.');
+    if (Hint.draw(W-80, 150, W-220, 250)) Hint.use(...this.hintRig());
+    Hint.drawMark();
 
-    if (st.phase === 'build' && button('LEAVE THE RIG', 40, H-72, 200, 44, {size:16})){
-      this.mode='free';
+    if (st.phase === 'build'){
+      if (button('STEP AWAY', W-230, H-72, 190, 44, {size:16})) this.mode='free';
+      txt('the rig keeps what you built', W-135, H-20, 12, 'rgba(159,216,239,.55)');
     }
 
     hudEl.textContent = rig.title + '   ·   ' +
@@ -6290,12 +6439,48 @@ const S_hea = {
     if (this.mutterT>0 && this.mode==='free'){ this.mutterT -= dt;
       if (this.mutterT<180) bubble(this.mutter, this.px, this.py-196, {w:300,size:17,pop:1}); }
 
-    if (Hint.draw(76, 150, 210, 250))
-      Hint.use('Treat the dangerous one first. A cold line is a nuisance. A runaway hot one is a hazard.');
+    if (Hint.draw(76, 150, 210, 250)) Hint.use(...this.hintFor());
+    Hint.drawMark();
 
     vignette(.4);
     hudEl.textContent = 'Thermal Exchange Hall   ·   ' +
       this.st.filter(s=>s.ok).length + '/2 skids steady';
+  },
+
+  hintFor(){
+    if (this.mode === 'plant'){
+      const p = HEA_PLANTS[this.pi];
+      return [p.need === 'cool'
+        ? 'That skid is making more heat than it can lose. Take heat out of it.'
+        : 'That skid is losing more heat than it makes. Put heat back in.'];
+    }
+    if (this.mode === 'fail')
+      return ['Take it off and try the other one. Nothing here is permanent.'];
+    if (this.mode === 'path'){
+      const i = HEA_PATH.findIndex((p,k) => this.pathAns[k] !== p.right);
+      if (i >= 0) return ['Section ' + (i+1) + ': ask what is between the two sides. ' +
+                          'Solid means conduction, moving fluid means convection, ' +
+                          'nothing at all means radiation.'];
+      return ['All four right. Go and trim the cooler.'];
+    }
+    if (this.mode === 'trim')
+      return ['Steady means the needle stops drifting, not that it reads low. ' +
+              'Nudge it and wait before you nudge it again.'];
+
+    // out on the floor
+    const hot = this.st.findIndex((s,i) => !s.ok && !s.leftBad && HEA_PLANTS[i].danger === 'high');
+    if (hot >= 0)
+      return ['SKID A is the one that can hurt somebody. Deal with it first.',
+              HEA_PLANTS[hot].x, 340, HEA_PLANTS[hot].name];
+    const any = this.st.findIndex(s => !s.ok && !s.leftBad);
+    if (any >= 0)
+      return [HEA_PLANTS[any].name + ' is still drifting. Walk up to it and press space.',
+              HEA_PLANTS[any].x, 340, HEA_PLANTS[any].name];
+    if (!this.pathDone)
+      return ['Both skids are settled. Read the analyser in the middle of the hall.',
+              HEA_KIOSK, 400, 'ANALYSER'];
+    return ['Back to the trim. Hold Skid A at steady state.',
+            HEA_KIOSK, 400, 'ANALYSER'];
   },
 
   openPlant(i){ SFX.click(); this.mode='plant'; this.pi=i; },
@@ -6489,6 +6674,8 @@ const S_hea = {
         }
       }
     }
+    if (Hint.draw(96, 640, 230, 560)) Hint.use(...this.hintFor());
+    Hint.drawMark();
     hudEl.textContent = 'Thermal Exchange Hall   ·   heat path ' +
       this.pathAns.filter(a=>a!==null).length + '/4';
   },
@@ -6557,6 +6744,9 @@ const S_hea = {
     if (good) this.holdT = (this.holdT||0) + dt; else this.holdT = 0;
     g.fillStyle='rgba(63,208,127,.25)';
     g.fillRect(W/2-120, 678, 240*clamp((this.holdT||0)/(isHard()?140:90),0,1), 6);
+
+    if (Hint.draw(76, 150, 210, 250)) Hint.use(...this.hintFor());
+    Hint.drawMark();
 
     if ((this.holdT||0) > (isHard() ? 140 : 90) && !this.trimDone){
       this.trimDone = true; this.pts += 1; SFX.great();
