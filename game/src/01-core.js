@@ -14,10 +14,12 @@ let last = 0;
 
 /* ---------------- input ---------------- */
 const keys = {};
+const keyBuf = {};  // latches a tap so a press between frames is never lost
 const mouse = { x: W/2, y: H/2, down:false, click:false, up:false };
 const hot = [];     // clickable rects registered each frame
 
 addEventListener('keydown', e => {
+  if (!keys[e.key]) { keyBuf[e.key] = T; keyBuf[e.code] = T; }
   keys[e.key] = true; keys[e.code] = true;
   if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
   if (e.key === 'f' || e.key === 'F') toggleFull();
@@ -40,7 +42,12 @@ cv.addEventListener('touchmove',  e => { const p = toCanvas(e.touches[0]); mouse
 cv.addEventListener('touchend',   e => { mouse.down=false; mouse.up=true; e.preventDefault(); }, {passive:false});
 
 function keyPressed(...list){
-  for (const k of list) if (keys[k]) { list.forEach(x => keys[x]=false); return true; }
+  for (const k of list){
+    if (keys[k] || (keyBuf[k] !== undefined && T - keyBuf[k] < 24)){
+      list.forEach(x => { keys[x] = false; delete keyBuf[x]; });
+      return true;
+    }
+  }
   return false;
 }
 
