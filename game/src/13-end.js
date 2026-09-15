@@ -2,6 +2,15 @@
    The verdict — Mr. Tarek reads your day back to you
    ============================================================ */
 function verdictFor(s){
+  /* walked off the job with work still open.  This outranks the score. */
+  if (G.quitEarly){
+    if (isHard()) return { k:'nephew', title:'SENT HOME EARLY',
+      line:'"Jojo. Jojo. Look at me. Go home. Take the long way, and do not touch anything."',
+      col:'#f0a02a' };
+    return { k:'fired', title:'WASTING MY TIME',
+      line:'"You have been employed for one morning. You finished none of it, and then you walked in here to tell me. Out."',
+      col:'#ee5f6e' };
+  }
   if (s >= 98) return { k:'badge', title:'TAKE MY BADGE',
     line:'"Twenty two years I have run this place. Take it. You deserve it more than I do."',
     col:'#f5b53d' };
@@ -77,6 +86,7 @@ const S_end = {
     let bPose, bFace = 'neutral';
     if (this.phase === 'act' || this.phase === 'done'){
       if (fired) { bFace = 'angry'; bPose = 'point'; }
+      else if (this.v.k === 'nephew'){ bFace='worry'; bPose = 'think'; }
       else if (this.v.k === 'badge'){ bFace='happy'; bPose = 'present'; }
       else if (this.v.k === 'employee'){ bFace='happy'; bPose = 'cheer'; }
       else { bFace='happy'; bPose = 'present'; }
@@ -102,6 +112,7 @@ const S_end = {
         hLift = -Math.abs(Math.sin(this.actK/9))*12;
       } else if (this.v.k === 'hired'){ hFace='happy'; hPose='reach'; }
       else if (this.v.k === 'training'){ hFace='worry'; hPose='hold'; }
+      else if (this.v.k === 'nephew'){ hFace='happy'; hPose='shrug'; }
       else { hFace='shock'; hPose='panic'; }
     }
 
@@ -196,6 +207,21 @@ const S_end = {
         }
       }
 
+      if (this.v.k === 'nephew'){
+        const k = clamp((this.actK-26)/44, 0, 1);
+        if (k > 0){
+          // he holds the pose, sighs, and points at the door
+          txt('*long sigh*', this.bossX, H*0.66-232, 17, 'rgba(232,238,244,.55)');
+          const ax = lerp(this.bossX+30, this.bossX+120, easeOut(k));
+          g.save(); g.translate(ax, H*0.66-120); g.rotate(0.25);
+          g.strokeStyle='#f0a02a'; g.lineWidth=5; g.lineCap='round';
+          g.beginPath(); g.moveTo(-26,0); g.lineTo(26,0); g.stroke();
+          g.beginPath(); g.moveTo(26,0); g.lineTo(12,-11); g.moveTo(26,0); g.lineTo(12,11); g.stroke();
+          g.restore();
+          if (k >= 1) txt('the long way', this.bossX+120, H*0.66-76, 14, 'rgba(240,160,42,.75)');
+        }
+      }
+
       if (fired && this.actK > 40 && this.actK < 60){
         // the wind-up: the boss hoists him by the shirt
         txt('...', (this.bossX+this.heroX)/2, H*0.66-140, 30, '#ee5f6e');
@@ -249,6 +275,17 @@ const S_end = {
         txt(Math.round(subjectPct(k)*this.barK) + '%', cx+cw-34, y, 14, '#6a7a86','right',400);
       });
 
+      // what never got started, if you clocked off early
+      if (G.quitEarly){
+        const open = STATIONS.filter(s2 => !G.done[s2.key]);
+        g.save(); g.translate(cx+cw/2, cy+ch-96); g.rotate(-0.06);
+        g.strokeStyle='rgba(200,70,80,.75)'; g.lineWidth=2.4;
+        rr(-206, -17, 412, 34, 6); g.stroke();
+        txt('WALKED OFF  ·  ' + open.length + (open.length===1?' JOB LEFT OPEN':' JOBS LEFT OPEN'),
+            0, 5, 15, 'rgba(180,50,60,.9)');
+        g.restore();
+      }
+
       // the total, stamped on
       const tk = clamp((this.barK - 0.75)/0.25, 0, 1);
       if (tk > 0){
@@ -263,7 +300,7 @@ const S_end = {
 
       if (this.barK >= 1 && this.phase === 'card'){
         this.phase = 'act'; this.actK = 0;
-        if (this.v.k === 'fired'){ SFX.sad(); }
+        if (this.v.k === 'fired' || this.v.k === 'nephew'){ SFX.sad(); }
         else if (this.v.k === 'badge'){ SFX.badge(); }
         else SFX.fanfare();
         this.convo = Convo([
@@ -290,23 +327,38 @@ const S_end = {
       if (T % 22 < dt) SFX.step();
       if (this.heroX <= 760){
         this.heroX = 760; this.phase = 'talk';
-        this.convo = Convo([
-          { by:NPCS.boss.name, text:'Sit down. Actually, do not. This will not take long.',
-            at:()=>[this.bossX, H*0.66-180], w:380 },
-          { by:NPCS.boss.name, text:'I have your morning here in writing.',
-            at:()=>[this.bossX, H*0.66-180], w:340 }
-        ], ()=>{ this.convo=null; this.phase='card'; SFX.stamp(); shake(6); });
+        this.convo = Convo(G.quitEarly
+          ? (isHard()
+            ? [ { by:NPCS.boss.name, text:'Back already. That was quick, even for you.',
+                  at:()=>[this.bossX, H*0.66-180], w:380 },
+                { by:NPCS.boss.name, text:'Your mother is going to ask me how you did. I am going to have to think about that.',
+                  at:()=>[this.bossX, H*0.66-180], w:420 } ]
+            : [ { by:NPCS.boss.name, text:'You are back. It is ten past ten.',
+                  at:()=>[this.bossX, H*0.66-180], w:360 },
+                { by:NPCS.boss.name, text:'Let us see what you managed in that time. This will not take long.',
+                  at:()=>[this.bossX, H*0.66-180], w:420 } ])
+          : [ { by:NPCS.boss.name, text:'Sit down. Actually, do not. This will not take long.',
+                at:()=>[this.bossX, H*0.66-180], w:380 },
+              { by:NPCS.boss.name, text:'I have your morning here in writing.',
+                at:()=>[this.bossX, H*0.66-180], w:340 } ],
+          ()=>{ this.convo=null; this.phase='card'; SFX.stamp(); shake(6); });
       }
     }
 
     if (this.convo) this.convo.draw();
 
     if (this.phase === 'done'){
-      if (button('PLAY AGAIN', W/2-230, H-64, 210, 46, {size:18})){
+      if (button('ADD ME TO THE BOARD', W/2-486, H-64, 300, 46, {col:'#3fd07f', size:17})){
+        SFX.click(); go(S_sign, 'fade');
+      }
+      if (button('PLAY AGAIN', W/2-176, H-64, 210, 46, {size:18})){
         G.reset(); G.dreamt = false; hero = CHARS[0]; go(S_menu, 'fade');
       }
-      if (button('CHOOSE ANOTHER ENGINEER', W/2+20, H-64, 300, 46, {col:'#f5b53d', size:16})){
+      if (button('CHOOSE ANOTHER ENGINEER', W/2+44, H-64, 300, 46, {col:'#f5b53d', size:16})){
         G.reset(); G.dreamt = false; go(S_select, 'fade');
+      }
+      if (button('THE BOARD', W/2+354, H-64, 170, 46, {size:16})){
+        SFX.click(); S_board.mark = -1; go(S_board, 'fade');
       }
     }
 

@@ -149,9 +149,10 @@ const S_menu = {
 
     /* buttons */
     const bw=320, bh=58, bx=W/2-bw/2;
-    if (button('START THE GAME', bx, 400, bw, bh, {size:22})) { SFX.great(); go(S_select); }
-    if (button('HOW TO PLAY',    bx, 470, bw, bh, {size:19})) { SFX.click(); go(S_help); }
-    if (button('CREDITS',        bx, 540, bw, bh, {size:19})) { SFX.click(); go(S_credits); }
+    if (button('START THE GAME', bx, 386, bw, bh, {size:22})) { SFX.great(); go(S_select); }
+    if (button('THE BOARD',      bx, 452, bw, 48, {size:19})) { SFX.click(); S_board.mark=-1; go(S_board); }
+    if (button('HOW TO PLAY',    bx, 510, bw, 48, {size:19})) { SFX.click(); go(S_help); }
+    if (button('CREDITS',        bx, 568, bw, 48, {size:19})) { SFX.click(); go(S_credits); }
 
     txt('AIChE Student Chapter', W/2, H-30, 14, 'rgba(234,244,250,.42)','center',400);
     hudEl.textContent = '';

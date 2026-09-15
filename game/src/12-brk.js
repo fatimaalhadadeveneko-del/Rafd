@@ -79,6 +79,9 @@ const SEAT_Y = 640;   // feet on the floor in front, thighs behind the seat
    S_brk — before and after the dream
    ============================================================ */
 const S_brk = {
+  bailKey: 'brk',
+  canBail(){ return this.mode === 'free' || this.mode === 'chat'; },
+
   enter(){
     Hint.begin('brk');
     this.after = !!G.dreamt;
@@ -534,6 +537,7 @@ const S_dream = {
     g.fillStyle = `rgba(90,110,180,${0.06 + Math.sin(T/60)*0.03})`;
     g.fillRect(0,0,W,H);
     vignette(.36);
+
     hudEl.textContent = this.phase==='quiz'
       ? `Thermodynamics   ·   question ${Math.min(this.qi+1,4)}/4`
       : 'Thermodynamics';

@@ -115,6 +115,9 @@ function emitFireStatic(x, y, i){
 }
 
 const S_hea = {
+  bailKey: 'hea',
+  canBail(){ return this.mode !== 'quiz'; },
+
   enter(){
     Music.play('work');
     Hint.begin('hea');
@@ -124,6 +127,7 @@ const S_hea = {
     this.firstTreated = null;
     this.pi = -1;
     this.pathAns = [null,null,null,null];
+    this.pathMiss = [false,false,false,false];
     this.pathLive = -1;
     this.trim = 0.2; this.trimDone = false;
     this.pts = 0; this.safePts = 0; this.scored = false;
@@ -544,7 +548,8 @@ const S_hea = {
       HEA_MODES.forEach((m,k)=>{
         const bw = pw, bh = 42, bx = x, by = py+ph+50+k*48;
         const chosen = this.pathAns[i] === m;
-        const locked = this.pathAns[i] !== null;
+        /* only a correct tag locks the row.  A wrong one can always be re-tagged. */
+        const locked = this.pathAns[i] === p.right;
         const right = (m === p.right);
         const z = locked ? {hover:false,clicked:false} : zone(bx,by,bw,bh);
         g.save();
@@ -565,8 +570,11 @@ const S_hea = {
                    : locked ? 'rgba(180,205,220,.35)' : '#dceaf2');
         if (z.clicked){
           this.pathAns[i] = m;
-          if (right){ this.pts += 1; SFX.good(); } else { SFX.bad(); }
-          this.say(p.why, 200);
+          if (right){
+            if (!this.pathMiss[i]) this.pts += 1;   // first time counts
+            SFX.good();
+          } else { this.pathMiss[i] = true; SFX.bad(); }
+          this.say(right ? p.why : 'Not that one. Look at what is between the two sides.', 200);
         }
       });
     });
@@ -578,9 +586,12 @@ const S_hea = {
     if (this.noteT > 0){
       this.noteT -= dt;
       wrapText(this.note, SX+SW/2, stripY+30, SW-60, 22, 17, '#f5e0c8','center',400);
-    } else if (this.pathAns.every(a=>a!==null)){
-      txt('path tagged end to end  ·  ' + this.pts + ' correct', SX+SW/2, stripY+30, 17,
+    } else if (HEA_PATH.every((p2,i2)=> this.pathAns[i2] === p2.right)){
+      txt('path tagged end to end, and all of it right', SX+SW/2, stripY+30, 17,
           '#8fe8b8','center',400);
+    } else if (this.pathAns.every(a=>a!==null)){
+      txt('every section tagged, but the red ones are wrong. Click one to try again.',
+          SX+SW/2, stripY+30, 17, '#f0b8be','center',400);
     } else {
       txt('tag every section with the mechanism that carries the heat through it',
           SX+SW/2, stripY+30, 17, 'rgba(207,224,234,.7)','center',400);
@@ -608,10 +619,23 @@ const S_hea = {
       ppe:{ hat:true, goggles:G.ppe.goggles, coat:G.ppe.coat }
     });
 
-    if (this.pathAns.every(a=>a!==null) && this.noteT <= 0){
-      if (button('NOW TRIM THE COOLER', W-352, H-58, 320, 44,
-                 {col:'#3fd07f', size:19})){
-        this.mode='trim'; this.pathDone=true; SFX.click();
+    const allRight = HEA_PATH.every((p,i)=> this.pathAns[i] === p.right);
+    const allTagged = this.pathAns.every(a=>a!==null);
+    if (allTagged && this.noteT <= 0){
+      if (allRight){
+        if (button('NOW TRIM THE COOLER', W-352, H-58, 320, 44,
+                   {col:'#3fd07f', size:19})){
+          this.mode='trim'; this.pathDone=true; SFX.click();
+        }
+      } else {
+        /* the red ones can be re-tagged for as long as you like, or left red */
+        txt('the red sections are still wrong. Click one to tag it again.',
+            W-186, H-76, 14, '#f0b8be');
+        if (button(leaveLabel('hea'), W-352, H-58, 320, 44, {col:'#8a7a5a', size:17})){
+          noteFault('hea'); this.pathLeft = true;
+          toast(leaveBlurb('hea'));
+          this.mode='trim'; this.pathDone=true;
+        }
       }
     }
     hudEl.textContent = 'Thermal Exchange Hall   ·   heat path ' +
@@ -697,6 +721,7 @@ const S_hea = {
         } else go(S_hub, 'fade');
       });
     }
+
     hudEl.textContent = 'Thermal Exchange Hall   ·   trimming to steady state';
   }
 };

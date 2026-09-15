@@ -475,6 +475,9 @@ function badProduct(x, y, fail){
    the scene
    ============================================================ */
 const S_sep = {
+  bailKey: 'sep',
+  canBail(){ return this.mode !== 'quiz'; },
+
   enter(){
     Music.play('lab');
     Hint.begin('sep');
@@ -840,6 +843,7 @@ const S_sep = {
 
     vignette(.34);
     const n = this.solved.filter(Boolean).length;
+
     hudEl.textContent = `Separation Techniques Lab   ·   samples ${n}/${SEP_BAYS.length}` +
       (this.ppeStage<2 ? '   ·   PPE not worn' : '   ·   PPE on');
   },

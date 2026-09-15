@@ -18,7 +18,22 @@ const keyBuf = {};  // latches a tap so a press between frames is never lost
 const mouse = { x: W/2, y: H/2, down:false, click:false, up:false };
 const hot = [];     // clickable rects registered each frame
 
+/* while someone is typing their name for the scoreboard, the keyboard
+   belongs to them and not to the walking or the full-screen shortcut */
+let typeBuf = null, typeMax = 14;
+function typingStart(init, max){ typeBuf = init || ''; typeMax = max || 14; }
+function typingText(){ return typeBuf === null ? '' : typeBuf; }
+function typingStop(){ const v = typeBuf; typeBuf = null; return v || ''; }
+function typingActive(){ return typeBuf !== null; }
+
 addEventListener('keydown', e => {
+  if (typeBuf !== null){
+    if (e.key === 'Backspace'){ typeBuf = typeBuf.slice(0, -1); e.preventDefault(); return; }
+    if (e.key.length === 1 && typeBuf.length < typeMax && /[\x20-\x7e]/.test(e.key)){
+      typeBuf += e.key; e.preventDefault(); return;
+    }
+    if (e.key !== 'Enter' && e.key !== 'Escape'){ e.preventDefault(); return; }
+  }
   if (!keys[e.key]) { keyBuf[e.key] = T; keyBuf[e.code] = T; }
   keys[e.key] = true; keys[e.code] = true;
   if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
@@ -309,6 +324,10 @@ function frame(ts){
   if (flashAmt > 0.01){
     g.fillStyle = `rgba(${flashCol},${flashAmt})`; g.fillRect(0,0,W,H);
     flashAmt *= Math.pow(0.86, dt);
+  }
+  /* the walk-out tab, on any scene that allows being walked out of */
+  if (scene && scene.bailKey && !trans && (!scene.canBail || scene.canBail())){
+    if (bailTab()) bailOut(scene.bailKey);
   }
   drawTransition();
   tickToast();

@@ -69,7 +69,7 @@ const S_hub = {
     if (this.px === undefined){ this.px = W/2; this.py = 610; }
     this.face = 'right'; this.walkT = 0; this.stepT = 0; this.nearS = null;
     if (this.susX === undefined) this.susX = this.px - 180;
-    this.susWalk = 0; this.susBubble = 0;
+    this.susWalk = 0; this.susBubble = 0; this.confirmQuit = false; this.nearBoss = false;
     /* a unit left with more than one thing wrong lets go shortly after you walk out */
     this.boomKey = null; this.boomT = 0;
     if (G.boom){
@@ -264,7 +264,7 @@ const S_hub = {
     if (keys.ArrowUp||keys.w||keys.W) dy--;
     if (keys.ArrowDown||keys.s||keys.S) dy++;
     const booming = this.boomKey !== null && this.boomT < 300;
-    if (booming){ dx = 0; dy = 0; }
+    if (booming || this.confirmQuit){ dx = 0; dy = 0; }
     const moving = (dx||dy) && !trans;
     if (dx) this.face = dx>0 ? 'right' : 'left';
     if (moving){
@@ -278,18 +278,35 @@ const S_hub = {
                size:rnd(3,6), col:'rgba(190,215,228,.30)', kind:'puff'}); }
     } else this.walkT = 0;
 
-    /* ================= the boss, once everything is done ================= */
+    /* ================= the boss, waiting by the office ================= */
     const all = this.allDone();
-    if (all){
+    {
       const bx = 1232, by = 648;
-      drawPerson(NPCS.boss, bx, by, 2.1, { dir:'left', face:'neutral', seed:2 });
+      drawPerson(NPCS.boss, bx, by, 2.1, {
+        dir:'left', seed:2,
+        face: all ? 'neutral' : 'angry',
+        pose: all ? undefined : 'cross'
+      });
       const near = Math.hypot(this.px-bx, this.py-by) < 140;
-      bubble(near ? 'Right. Let us talk about your day.' : 'Over here, graduate.',
-             bx-70, by-232, {w:216, size:16, pop:1});
-      if (near){
-        txt('SPACE', bx, by+20, 13, '#f5b53d');
-        if (keyPressed(' ','Enter','Space')){ SFX.click(); go(S_end, 'fade'); }
+      this.nearBoss = near;
+      bubble(all ? (near ? 'Right. Let us talk about your day.' : 'Over here, graduate.')
+                 : (near ? 'You are standing here. Why are you standing here?'
+                         : 'Office is this way. When you are finished.'),
+             bx-70, by-232, {w:224, size:16, pop:1});
+      if (near && !this.confirmQuit){
+        const cx = clamp(bx, 200, W-200);
+        panel(cx-196, by-96, 392, 46, 'rgba(8,22,33,.96)',
+              all ? '#f5b53d' : 'rgba(238,95,110,.6)', 10);
+        txt(all ? 'SPACE  —  report back to Mr. Tarek'
+                : 'SPACE  —  report back now and go home',
+            cx, by-67, 16, all ? '#f5cf8a' : '#f0b8be');
+        if (keyPressed(' ','Enter','Space')){
+          SFX.click();
+          if (all) go(S_end, 'fade'); else this.confirmQuit = true;
+        }
       }
+      if (!near) this.confirmQuit = false;
+
     }
 
     /* ================= Bassam, keeping his distance ================= */
@@ -325,7 +342,7 @@ const S_hub = {
       ppe:{ hat:true, goggles: G.ppe.goggles, coat: G.ppe.coat }
     });
 
-    if (this.nearLocked && !this.nearS){
+    if (this.nearLocked && !this.nearS && !this.nearBoss && !this.confirmQuit){
       const yy = this.py - 218, cx = clamp(this.px, 196, W-196);
       g.save(); g.shadowColor='rgba(0,0,0,.5)'; g.shadowBlur=12;
       g.fillStyle='rgba(16,16,20,.96)'; rr(cx-186, yy-32, 372, 58, 10); g.fill(); g.restore();
@@ -335,7 +352,7 @@ const S_hub = {
       txt(leftU + (leftU===1?' unit still open':' units still open'), cx, yy+11, 14, 'rgba(200,206,216,.6)');
     }
 
-    if (this.nearS){
+    if (this.nearS && !this.confirmQuit){
       const s = this.nearS, yy = this.py - 218, cx = clamp(this.px, 128, W-128);
       g.save(); g.shadowColor='rgba(0,0,0,.5)'; g.shadowBlur=12;
       g.fillStyle='rgba(5,22,33,.96)'; rr(cx-118, yy-24, 236, 42, 10); g.fill(); g.restore();
@@ -411,6 +428,31 @@ const S_hub = {
       g.beginPath(); g.moveTo(st.x-58, GROUND); g.lineTo(st.x+58, GROUND);
       g.lineTo(st.x+26, GROUND-150); g.lineTo(st.x-26, GROUND-150); g.closePath(); g.fill();
       if (Math.random() < .06) emitSmoke(st.x + rnd(-40,40), GROUND-10, 1, 'rgba(60,52,48,.35)');
+    }
+
+    /* clocking off with work still open.  Nobody is stopping you. */
+    if (this.confirmQuit){
+      const left = unitsLeft();
+      shade(.72);
+      panel(W/2-380, 190, 760, 300, 'rgba(10,16,24,.97)', '#ee5f6e', 14);
+      txt('CLOCK OFF EARLY?', W/2, 250, 34, '#ee5f6e');
+      wrapText(left === 1
+        ? 'One thing on your list is still open. You can hand the morning back to Mr. Tarek exactly as it is.'
+        : left + ' things on your list are still open. You can hand the morning back to Mr. Tarek exactly as it is.',
+        W/2, 306, 620, 28, 19, '#e8eef4', 'center', 400);
+      wrapText(isHard()
+        ? 'He is your uncle. That has to count for something.'
+        : 'He will read it back to you. All of it.',
+        W/2, 372, 620, 26, 17, 'rgba(232,238,244,.6)', 'center', 400);
+      const openUnits = STATIONS.filter(s2 => !G.done[s2.key]);
+      txt(openUnits.map(s2 => s2.name.split(' ')[0]).join('  ·  '),
+          W/2, 412, 15, 'rgba(238,95,110,.8)');
+      if (button('GO AND FACE HIM', W/2-330, 434, 300, 46, {col:'#ee5f6e', size:18})){
+        G.quitEarly = true; SFX.bad(); this.confirmQuit = false; go(S_end, 'fade');
+      }
+      if (button('NOT YET', W/2+30, 434, 300, 46, {size:18})){
+        SFX.click(); this.confirmQuit = false;
+      }
     }
 
     vignette(.36);

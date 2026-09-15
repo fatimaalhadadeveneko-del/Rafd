@@ -10,7 +10,8 @@ const tapEl = document.getElementById('tapstart');
 function devScene(){
   const h = (location.hash || '').slice(1).split(',');
   const map = { sep:()=>S_sep, rea:()=>S_rea, flu:()=>S_flu, hea:()=>S_hea,
-                brk:()=>S_brk, hub:()=>S_hub, end:()=>S_end, select:()=>S_select };
+                brk:()=>S_brk, hub:()=>S_hub, end:()=>S_end, select:()=>S_select,
+                board:()=>S_board, sign:()=>S_sign };
   let target = null;
   for (const part of h){
     if (part === 'mute' && musicGain) musicGain.gain.value = 0;
@@ -20,8 +21,9 @@ function devScene(){
     if (who) hero = who;
     /* mark the four units finished, to reach the break room or the verdict */
     if (part === 'alldone'){
-      for (const s of STATIONS) if (s.key !== 'brk') G.done[s.key] = true;
+      for (const s of STATIONS) G.done[s.key] = true;
     }
+    if (part === 'quit') G.quitEarly = true;
     if (map[part]) target = map[part]();
   }
   return target;

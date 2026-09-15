@@ -19,11 +19,14 @@ const G = {
   faults: {},                // station key -> how many faults were left behind
   boom: null,                // a station key waiting to blow up in the yard
   boomed: {},                // stations that have already gone off
+  quitEarly: false,          // reported back with work still open
+  bailed: {},                // stations walked out of half finished
   reset(){
     for (const k in this.got){ this.got[k]=0; this.maxp[k]=0; }
     this.done = {}; this.ppe = {goggles:false,coat:false,hat:false}; this.ppeTries=0;
     this.sheet=false; this.hintUsed={}; this.blunders=0; this.quizDone={};
     this.faults = {}; this.boom = null; this.boomed = {};
+    this.quitEarly = false; this.bailed = {};
   }
 };
 
@@ -361,3 +364,63 @@ function makeTFQuiz(key, onDone){
     }
   };
 }
+
+
+/* ============================================================
+   Clocking off early
+   ============================================================ */
+const UNIT_KEYS = ['sep','rea','flu','hea','brk'];
+function unitsLeft(){ return UNIT_KEYS.filter(k => !G.done[k]).length; }
+
+/* the little "walk out" tab every station carries, so nobody at a booth
+   is ever trapped in a room they have run out of time for */
+function bailTab(){
+  const w = 168, h = 34, x = W - w - 18, y = 16;
+  const z = zone(x, y, w, h);
+  g.fillStyle = z.hover ? 'rgba(70,26,30,.96)' : 'rgba(10,14,20,.78)';
+  rr(x, y, w, h, 8); g.fill();
+  g.strokeStyle = z.hover ? '#ee5f6e' : 'rgba(190,200,210,.35)';
+  g.lineWidth = z.hover ? 2.4 : 1.6; rr(x, y, w, h, 8); g.stroke();
+  txt('WALK OUT  ·  ESC', x + w/2, y + h/2 + 5, 14,
+      z.hover ? '#ffd0d4' : 'rgba(210,220,230,.7)');
+  return z.clicked || keyPressed('Escape');
+}
+/* leave a station wherever you happen to be standing in it */
+function bailOut(station){
+  G.bailed[station] = true;
+  SFX.bad();
+  toast(isWeak(station) ? 'close enough' : 'leaving it half done');
+  go(S_hub, 'fade');
+}
+
+/* ============================================================
+   The scoreboard — a clipboard of Mr. Tarek's reports.
+   Saved in the browser where it is allowed, and kept for the
+   session either way, which is all a booth needs.
+   ============================================================ */
+const Board = {
+  KEY: 'chemengquest.board.v1',
+  mem: null,
+  load(){
+    if (this.mem) return this.mem;
+    this.mem = [];
+    try {
+      const raw = localStorage.getItem(this.KEY);
+      if (raw) this.mem = JSON.parse(raw) || [];
+    } catch (e) { /* file:// or private browsing. The session copy still works. */ }
+    return this.mem;
+  },
+  save(){
+    try { localStorage.setItem(this.KEY, JSON.stringify(this.mem.slice(0, 60))); }
+    catch (e) { /* nothing to do about it, and nothing that needs saying */ }
+  },
+  add(entry){
+    this.load();
+    this.mem.push(entry);
+    this.mem.sort((a,b) => b.score - a.score);
+    this.mem = this.mem.slice(0, 60);
+    this.save();
+    return this.mem.indexOf(entry);
+  },
+  clear(){ this.mem = []; this.save(); }
+};

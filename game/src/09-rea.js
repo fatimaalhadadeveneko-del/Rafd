@@ -219,7 +219,19 @@ function drawPhone(x, y, sel, onPick){
 /* ============================================================
    scene
    ============================================================ */
+/* what a client says when you hand her a reactor that does not work */
+const REA_RUINED = [
+  'So that is what I am taking back to my supervisor. Wonderful.',
+  'You are going to come back and fix this. Say you are going to come back.',
+  'I asked for one thing. One.',
+  'No, no. Leave it. It is fine. It is clearly fine.',
+  'I will put a bucket under it for now.'
+];
+
 const S_rea = {
+  bailKey: 'rea',
+  canBail(){ return this.mode !== 'quiz'; },
+
   enter(){
     Music.play('lab');
     Hint.begin('rea');
@@ -304,16 +316,18 @@ const S_rea = {
     let nearC = -1;
     REA_CLIENTS.forEach((c,i)=>{
       const solved = this.solved[i];
+      const ruined = solved && !!this.leftBad[i];   // dealt with, but not well
       const active = this.mode==='client' && this.ci===i;
       // desk
       g.fillStyle='#4a2a3a'; rr(c.x-120, 560, 240, 16, 4); g.fill();
       g.fillStyle='#39202d'; rr(c.x-110, 576, 220, 36, 4); g.fill();
       // install pad
       const padOn = active && this.phase==='phone';
-      g.fillStyle = solved ? 'rgba(63,208,127,.14)'
+      g.fillStyle = ruined ? 'rgba(238,95,110,.16)'
+                  : solved ? 'rgba(63,208,127,.14)'
                   : padOn ? `rgba(238,95,110,${.18+Math.sin(T/10)*.1})` : 'rgba(238,95,110,.07)';
       g.beginPath(); g.ellipse(c.x+180, 612, 84, 18, 0, 0, 7); g.fill();
-      g.strokeStyle = solved ? 'rgba(63,208,127,.5)' : 'rgba(238,95,110,.35)';
+      g.strokeStyle = (solved && !ruined) ? 'rgba(63,208,127,.5)' : 'rgba(238,95,110,.35)';
       g.lineWidth=2; g.setLineDash([7,7]);
       g.beginPath(); g.ellipse(c.x+180, 612, 84, 18, 0, 0, 7); g.stroke(); g.setLineDash([]);
 
@@ -341,18 +355,27 @@ const S_rea = {
 
       // nameplate
       panel(c.x-80, 330, 160, 34, 'rgba(12,6,12,.9)',
-            solved?'rgba(63,208,127,.6)':'rgba(238,95,110,.5)', 7);
-      txt(NPCS[c.npc].name, c.x, 347, 15, solved?'#8fe8b8':'#f0b0bc');
+            (solved && !ruined) ? 'rgba(63,208,127,.6)' : 'rgba(238,95,110,.5)', 7);
+      txt(NPCS[c.npc].name, c.x, 347, 15, (solved && !ruined) ? '#8fe8b8' : '#f0b0bc');
 
       // the client
       const talking = active && this.convo && this.convo.speaking(NPCS[c.npc].name);
       drawPerson(NPCS[c.npc], c.x, 606, 2.0, {
-        dir: this.px > c.x ? 'right' : 'left',
-        face: solved ? 'happy' : active ? 'neutral' : 'worry',
+        dir: ruined ? (this.px > c.x ? 'right' : 'left') : (this.px > c.x ? 'right' : 'left'),
+        face: ruined ? 'angry' : solved ? 'happy' : active ? 'neutral' : 'worry',
         talk: talking, seed: i*7,
-        pose: talking ? 'talk' : (solved ? 'cheer' : 'idle')
+        pose: talking ? 'talk' : ruined ? 'cross' : (solved ? 'cheer' : 'idle')
       });
-      if (!solved && !active){
+      if (ruined && !active){
+        /* she is looking at what you left her, and she has opinions */
+        const bob = Math.sin(T/18 + i)*3;
+        txt('!', c.x, 384 + bob, 30, '#ee5f6e');
+        const cyc = Math.floor((T/300 + i*1.7)) % 4;
+        if (cyc < 2 && Math.abs(this.px - c.x) < 300)
+          bubble(REA_RUINED[(i + cyc) % REA_RUINED.length], c.x, 420,
+                 { w:300, size:15, pop:1 });
+      }
+      else if (!solved && !active){
         const bob = Math.sin(T/18 + i)*3;
         txt('!', c.x, 384 + bob, 30, '#f5b53d');
       }
@@ -437,6 +460,7 @@ const S_rea = {
 
     vignette(.38);
     const n = this.solved.filter(Boolean).length;
+
     hudEl.textContent = `Reactor Design Lab   ·   clients ${n}/3   ·   correct calls ${this.pts}/9`;
   },
 
@@ -563,8 +587,8 @@ const S_rea = {
             this.leftBad[this.ci] = { sel:{...this.sel}, r:{...r} };
             this.solved[this.ci] = true;
             this.mode='free'; this.convo=null; clearParts();
-            toast(leaveBlurb('rea'));
-            if (this.solved.every(Boolean)) toast('All three clients dealt with. Exit is on the right.');
+            toast(NPCS[REA_CLIENTS[this.ci].npc].name + ' watched you walk away from it.');
+            if (this.solved.every(Boolean)) toast('All three clients dealt with. Two of them are furious.');
           }
           txt(leaveBlurb('rea'), W/2+122, H-8, 12, 'rgba(200,190,160,.55)');
         }

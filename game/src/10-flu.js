@@ -242,6 +242,9 @@ function drawRigLine(st, rig){
    scene
    ============================================================ */
 const S_flu = {
+  bailKey: 'flu',
+  canBail(){ return this.mode !== 'quiz'; },
+
   enter(){
     Music.play('work');
     Hint.begin('flu');
@@ -714,18 +717,41 @@ const S_flu = {
       txt('measured Reynolds number   ' + Re.toLocaleString(), W/2, 128, 22, '#f5cf8a','center',400);
       if (G.sheet){
         cheatSheet(W/2, 330, 1.35, st.re);
+        const settled = st.re === rig.re;
         ['laminar','transition','turbulent'].forEach((k,i)=>{
-          const z = zone(W/2-152, 268 + i*43, 300, 40);
+          const z = settled ? {hover:false,clicked:false} : zone(W/2-152, 268 + i*43, 300, 40);
           if (z.hover){ g.strokeStyle='#23a6e0'; g.lineWidth=2.4;
             rr(W/2-152, 268+i*43, 300, 40, 6); g.stroke(); }
-          if (z.clicked && !st.re){
+          if (st.re === k){
+            g.strokeStyle = k === rig.re ? '#3fd07f' : '#ee5f6e'; g.lineWidth=3;
+            rr(W/2-152, 268+i*43, 300, 40, 6); g.stroke();
+          }
+          if (z.clicked){
             st.re = k; SFX.click();
-            if (k === rig.re){ this.pts += 1; SFX.good(); toast('Correct regime.'); }
-            else { SFX.bad(); toast('Not that one. Check the ranges.'); }
-            after(70, ()=> this.finishRig());
+            if (k === rig.re){
+              if (!st.reMiss) this.pts += 1;
+              SFX.good(); toast('Correct regime.');
+              after(70, ()=> this.finishRig());
+            } else {
+              st.reMiss = true; SFX.bad(); toast('Not that one. Check the ranges.');
+            }
           }
         });
-        txt('click a row to tick it', W/2, 470, 15, 'rgba(207,230,242,.6)','center',400);
+        /* wrong is never the end of it.  Read the ranges again, or hand it in as it is. */
+        if (st.reMiss && !settled){
+          txt('that is not the band this Re falls in. Look at the sheet again.',
+              W/2, 468, 17, '#f0b8be','center',400);
+          if (button('TICK ANOTHER ROW', W/2-320, 500, 300, 46, {col:'#35c8f0', size:17})){
+            st.re = null; SFX.click();
+          }
+          if (button(leaveLabel('flu'), W/2+20, 500, 300, 46, {col:'#8a7a5a', size:16})){
+            noteFault('flu'); st.leftRegime = true;
+            toast(leaveBlurb('flu'));
+            this.finishRig();
+          }
+        } else if (!st.re){
+          txt('click a row to tick it', W/2, 470, 15, 'rgba(207,230,242,.6)','center',400);
+        }
       } else {
         panel(W/2-320, 250, 640, 130, 'rgba(48,26,10,.95)', 'rgba(245,181,61,.6)');
         txt('You never picked up the cheat sheet.', W/2, 292, 22, '#f5cf8a');
@@ -756,6 +782,7 @@ const S_flu = {
     if (st.phase === 'build' && button('LEAVE THE RIG', 40, H-72, 200, 44, {size:16})){
       this.mode='free';
     }
+
     hudEl.textContent = rig.title + '   ·   ' +
       (st.placed.filter(Boolean).length + '/5 pipes, ' +
        st.bolted.filter(Boolean).length + '/6 flanges' +
@@ -776,7 +803,9 @@ const S_flu = {
       this.pts += 1;                     // held the line in the band
       if (st.relief) this.safePts += 1;
       st.phase='build'; this.mode='free'; SFX.great();
-      toast(name + ' is running.');
+      toast(st.leftRegime
+        ? name + ' is running, but the regime box is still blank on the sheet.'
+        : name + ' is running.');
     }
     if (this.rigs.every(r=>r.done)){
       toast(this.rigs.some(r=>r.leftBad)

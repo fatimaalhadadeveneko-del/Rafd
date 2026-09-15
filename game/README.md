@@ -56,8 +56,9 @@ Click once when the title card appears so the browser lets the sound play.
    * **Thermal Exchange Hall** — one skid running away hot, one merely cold. Which you treat first is the safety call. Then walk up to the thermal path analyser standing in the middle of the hall and tag how the heat crosses a furnace gap, a steel wall, a still film and a flowing fluid, before trimming to steady state.
    * **Break Room** — locked until the four units are finished. A colleague, a couch, and a thermodynamics nightmare you will not enjoy.
 
-   Nothing forces you to put a mistake right. Every failure offers a second
-   button beside the retry: **FIX IT LATER** for an engineer who knows better,
+   Nothing forces you to put a mistake right, and nothing forces you to walk
+   away from one either. Every failure offers a second button beside the retry:
+   **FIX IT LATER** for an engineer who knows better,
    or **LEAVE IT AS IT IS** in a subject they are weak in, where they genuinely
    believe it is fine. It costs the marks and leaves the equipment running
    wrong with an UNRESOLVED tag on it. Leave two things wrong in the same unit
@@ -65,6 +66,32 @@ Click once when the title card appears so the browser lets the sound play.
    was that?*, or, if it was their weak subject, decides they are imagining
    things. It stays on the incident board until the verdict.
 5. Report back to Mr. Tarek and find out whether you keep the job.
+6. Pin your run to **the board** by the office door, if you want it kept.
+
+## Leaving early
+
+A booth queue does not wait, so nothing in the game traps you.
+
+* Every room has a **WALK OUT · ESC** tab in the top right. It drops you back in
+  the yard wherever you happen to be standing, half-built line and all.
+* Mr. Tarek waits by his office from the start. Talk to him at any point and he
+  will ask whether you really want to clock off with work still open. Say yes
+  and he reads the morning back to you exactly as it is — which, with four units
+  untouched, goes about as well as you would expect. Jojo gets a different
+  reception, on account of being family.
+* Nothing is ever a dead end either. Every wrong call can be retried as many
+  times as you like — the wrong machine on the pad, a mis-read Reynolds number,
+  a mis-tagged heat path, a reactor that came out as purple goo. The only way to
+  lose the marks is to choose to leave it.
+
+## The board
+
+**THE BOARD** on the main menu, and the button at the end of a run, open the
+cork board outside the office: Mr. Tarek's reports, best score first, with the
+name you type on the slip, the engineer you played, the verdict, and whether you
+walked off or left anything burning. It is saved in the browser it was played
+in, so a booth laptop keeps the day's runs. **CLEAR THE BOARD** wipes it, and
+asks twice.
 
 ## Scoring
 
@@ -130,8 +157,10 @@ Two more, for setting a scene up quickly:
 ```
 ChemEngQuest.html#hea,jojo        play that station as a chosen engineer
                                   (#layla #omar #yusra #jojo)
-ChemEngQuest.html#hub,alldone     the four units already finished, so the
+ChemEngQuest.html#hub,alldone     everything already finished, so the
                                   break room and the verdict are reachable
+ChemEngQuest.html#end,quit        the verdict for clocking off early
+ChemEngQuest.html#board           the scoreboard
 ```
 
 ## Editing the game
@@ -154,6 +183,7 @@ node game/build.mjs
 | `07-hub.js` | the refinery yard |
 | `08-sep.js` … `12-brk.js` | the five stations |
 | `13-end.js` | the verdict |
+| `14-board.js` | the cork board and the slip you sign |
 | `99-boot.js` | startup |
 
 There are no dependencies and no build tools beyond Node for the concatenation
