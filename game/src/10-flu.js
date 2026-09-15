@@ -3,17 +3,95 @@
    ============================================================ */
 const FLU_ROOM = 1900;
 
-/* the line the player assembles, in rig-view coordinates */
+/* ============================================================
+   The line the player assembles.  Every corner is a real 90 degree
+   elbow, not a mitre, so each segment is a straight run plus the bend
+   that finishes it.  R is the bend radius.
+   ============================================================ */
+const ELB = 34;
 const PIPE_SEGS = [
-  { a:[390,520], b:[520,520] },
-  { a:[520,520], b:[520,380] },
-  { a:[520,380], b:[880,380] },
-  { a:[880,380], b:[880,520] },
-  { a:[880,520], b:[1040,520] }
+  { a:[390,520], b:[486,520], elbow:{ cx:486, cy:486, a0:Math.PI/2, a1:0,          ccw:true  },
+    end:[520,486], endVert:true },
+  { a:[520,486], b:[520,414], elbow:{ cx:554, cy:414, a0:Math.PI,   a1:Math.PI*1.5, ccw:false },
+    end:[554,380], endVert:false },
+  { a:[554,380], b:[846,380], elbow:{ cx:846, cy:414, a0:Math.PI*1.5,a1:Math.PI*2,  ccw:false },
+    end:[880,414], endVert:true },
+  { a:[880,414], b:[880,486], elbow:{ cx:914, cy:486, a0:Math.PI/2, a1:Math.PI,     ccw:false },
+    end:[914,520], endVert:false },
+  { a:[914,520], b:[1040,520], elbow:null, end:[1040,520], endVert:false }
 ];
-const JOINTS = [[390,520],[520,520],[520,380],[880,380],[880,520],[1040,520]];
+/* the seams you have to bolt, in order along the line */
+const JOINTS = [
+  { p:[390,520],  vert:false },
+  { p:[520,486],  vert:true  },
+  { p:[554,380],  vert:false },
+  { p:[880,414],  vert:true  },
+  { p:[914,520],  vert:false },
+  { p:[1040,520], vert:false }
+];
 const MOVER_PAD = [318, 520];
 const RELIEF_PAD = [700, 380];
+
+/* ---------- pipe drawing with a proper cylindrical shade ---------- */
+function pipeShade(col, vertical, x, y, w){
+  const gr = vertical
+    ? g.createLinearGradient(x - w/2, 0, x + w/2, 0)
+    : g.createLinearGradient(0, y - w/2, 0, y + w/2);
+  gr.addColorStop(0,    col.dark);
+  gr.addColorStop(0.28, col.lit);
+  gr.addColorStop(0.46, col.hi);
+  gr.addColorStop(0.72, col.lit);
+  gr.addColorStop(1,    col.dark);
+  return gr;
+}
+function bigPipe(x1,y1,x2,y2,w,col){
+  const vertical = Math.abs(x2-x1) < 0.5;
+  g.save();
+  g.strokeStyle = pipeShade(col, vertical, (x1+x2)/2, (y1+y2)/2, w);
+  g.lineWidth = w; g.lineCap = 'butt';
+  g.beginPath(); g.moveTo(x1,y1); g.lineTo(x2,y2); g.stroke();
+  /* weld seams every so often */
+  g.strokeStyle = 'rgba(0,0,0,.18)'; g.lineWidth = 2;
+  const len = Math.hypot(x2-x1, y2-y1), ux = (x2-x1)/(len||1), uy = (y2-y1)/(len||1);
+  for (let d = 56; d < len - 10; d += 56){
+    const px = x1 + ux*d, py = y1 + uy*d;
+    g.beginPath();
+    g.moveTo(px - uy*w/2, py + ux*w/2); g.lineTo(px + uy*w/2, py - ux*w/2);
+    g.stroke();
+  }
+  g.restore();
+}
+function bigElbow(e, w, col){
+  g.save();
+  /* the bend is shaded as a curved cylinder: outer dark, inner lit */
+  g.lineCap = 'butt';
+  g.strokeStyle = col.dark; g.lineWidth = w;
+  g.beginPath(); g.arc(e.cx, e.cy, ELB, e.a0, e.a1, e.ccw); g.stroke();
+  g.strokeStyle = col.lit;  g.lineWidth = w*0.62;
+  g.beginPath(); g.arc(e.cx, e.cy, ELB, e.a0, e.a1, e.ccw); g.stroke();
+  g.strokeStyle = col.hi;   g.lineWidth = w*0.22;
+  g.beginPath(); g.arc(e.cx, e.cy, ELB - w*0.16, e.a0, e.a1, e.ccw); g.stroke();
+  g.restore();
+}
+/* a ghosted run, for a segment not yet installed */
+function ghostSeg(seg, w){
+  g.save();
+  g.strokeStyle = `rgba(35,166,224,${.28+Math.sin(T/14)*.10})`;
+  g.lineWidth = w; g.lineCap='butt'; g.setLineDash([13,11]);
+  g.beginPath(); g.moveTo(seg.a[0],seg.a[1]); g.lineTo(seg.b[0],seg.b[1]); g.stroke();
+  if (seg.elbow){
+    g.beginPath(); g.arc(seg.elbow.cx, seg.elbow.cy, ELB, seg.elbow.a0, seg.elbow.a1, seg.elbow.ccw);
+    g.stroke();
+  }
+  g.setLineDash([]); g.restore();
+}
+/* a pipe support under a horizontal run */
+function pipeSupport(x, yTop, yFloor){
+  g.fillStyle='#2c4250'; g.fillRect(x-7, yTop, 14, yFloor-yTop);
+  g.fillStyle='#22343f'; g.fillRect(x-3, yTop, 6, yFloor-yTop);
+  g.fillStyle='#38505f'; rr(x-20, yFloor-8, 40, 8, 2); g.fill();
+  g.fillStyle='#3f5a6b'; rr(x-15, yTop-5, 30, 7, 3); g.fill();
+}
 
 const FLU_MOVERS = [
   { id:'pump', name:'Centrifugal pump', sub:'moves liquids', draw:unitPump },
@@ -73,82 +151,89 @@ function cheatSheet(x, y, s, ticked, hover){
 function drawRigLine(st, rig){
   const liquidLine = rig.fluid === 'liquid';
   const col = liquidLine
-    ? { shell:'#4f7f9a', inner:'#2f5568' }
-    : { shell:'#8a9aa6', inner:'#5a6a76' };
+    ? { dark:'#274a5c', lit:'#4f88a4', hi:'#8ec4dc' }
+    : { dark:'#4c5762', lit:'#8b9aa6', hi:'#c6d3dc' };
+  const W_ = 30;
 
-  // inlet and outlet stubs, always present
-  pipeSeg(150, 520, MOVER_PAD[0]-46, 520, 26, col);
-  pipeSeg(1040, 520, 1130, 520, 26, col);
-  // wall plates
-  g.fillStyle='#2b3f4c'; rr(126, 486, 26, 68, 4); g.fill();
-  g.fillStyle='#2b3f4c'; rr(1128, 486, 26, 68, 4); g.fill();
-  txt('FEED', 138, 470, 13, '#9fd8ef');
-  txt('TO PLANT', 1140, 470, 13, '#9fd8ef');
+  /* structural steel the line is hung from */
+  g.fillStyle='#183849'; g.fillRect(120, 336, 1010, 12);
+  g.fillStyle='#10293a'; g.fillRect(120, 348, 1010, 5);
+  for (const bx of [200, 430, 660, 890, 1090]){
+    g.fillStyle='#183849'; g.fillRect(bx-7, 348, 14, 56);
+    g.fillStyle='#10293a'; g.fillRect(bx-3, 348, 6, 56);
+  }
+  pipeSupport(450, 556, 600);
+  pipeSupport(980, 556, 600);
+  pipeSupport(700, 416, 600);
 
-  // the segments
-  PIPE_SEGS.forEach((s,i)=>{
-    if (st.placed[i]) pipeSeg(s.a[0], s.a[1], s.b[0], s.b[1], 26, col);
-    else {
-      g.save();
-      g.strokeStyle = `rgba(35,166,224,${.3+Math.sin(T/14+i)*.12})`;
-      g.lineWidth = 26; g.lineCap='butt';
-      g.setLineDash([12,10]);
-      g.beginPath(); g.moveTo(s.a[0],s.a[1]); g.lineTo(s.b[0],s.b[1]); g.stroke();
-      g.setLineDash([]);
-      g.restore();
-    }
+  /* inlet and outlet stubs, always present */
+  bigPipe(150, 520, MOVER_PAD[0]-46, 520, W_, col);
+  bigPipe(1040, 520, 1130, 520, W_, col);
+  /* wall penetrations */
+  [[126,'FEED'], [1128,'TO PLANT']].forEach(([wx, lab], i)=>{
+    g.fillStyle='#1b3341'; rr(wx-6, 478, 34, 84, 5); g.fill();
+    g.fillStyle='#2b4250'; rr(wx, 486, 26, 68, 4); g.fill();
+    g.strokeStyle='#3f5e70'; g.lineWidth=2; rr(wx, 486, 26, 68, 4); g.stroke();
+    txt(lab, wx+13, 466, 13, '#9fd8ef');
   });
 
-  // flanges
+  /* the segments, each a straight run plus the elbow that finishes it */
+  PIPE_SEGS.forEach((seg,i)=>{
+    if (st.placed[i]){
+      bigPipe(seg.a[0], seg.a[1], seg.b[0], seg.b[1], W_, col);
+      if (seg.elbow) bigElbow(seg.elbow, W_, col);
+    } else ghostSeg(seg, W_);
+  });
+
+  /* flanges at every seam */
   JOINTS.forEach((j,i)=>{
-    const vertical = (i===2 || i===3);
-    flange(j[0], j[1], vertical ? Math.PI/2 : 0, 34, st.bolted[i]);
+    flange(j.p[0], j.p[1], j.vert ? Math.PI/2 : 0, 38, st.bolted[i]);
   });
 
-  // relief valve
-  if (st.relief) reliefValve(RELIEF_PAD[0], RELIEF_PAD[1]-13, 1.15, { venting: st.venting });
+  /* relief valve on the top run */
+  if (st.relief) reliefValve(RELIEF_PAD[0], RELIEF_PAD[1]-15, 1.15, { venting: st.venting });
   else if (st.phase !== 'run'){
     g.save();
     g.strokeStyle=`rgba(245,181,61,${.4+Math.sin(T/12)*.2})`; g.lineWidth=2.4;
     g.setLineDash([6,6]);
-    g.beginPath(); g.arc(RELIEF_PAD[0], RELIEF_PAD[1]-34, 26, 0, 7); g.stroke();
+    g.beginPath(); g.arc(RELIEF_PAD[0], RELIEF_PAD[1]-36, 26, 0, 7); g.stroke();
     g.setLineDash([]); g.restore();
-    txt('relief', RELIEF_PAD[0], RELIEF_PAD[1]-66, 12, 'rgba(245,181,61,.75)');
+    txt('relief', RELIEF_PAD[0], RELIEF_PAD[1]-68, 12, 'rgba(245,181,61,.75)');
   }
 
-  // the mover, or its empty pad
+  /* the mover, or its empty pad */
   if (st.mover){
     const m = FLU_MOVERS.find(m=>m.id===st.mover);
-    m.draw(MOVER_PAD[0], MOVER_PAD[1]+38, 1.05, { spin: st.spin });
+    m.draw(MOVER_PAD[0], MOVER_PAD[1]+40, 1.05, { spin: st.spin });
   } else {
     g.save();
     g.strokeStyle=`rgba(35,166,224,${.35+Math.sin(T/11)*.18})`; g.lineWidth=3;
     g.setLineDash([9,8]);
-    rr(MOVER_PAD[0]-58, MOVER_PAD[1]-36, 116, 74, 8); g.stroke();
+    rr(MOVER_PAD[0]-58, MOVER_PAD[1]-36, 116, 76, 8); g.stroke();
     g.setLineDash([]); g.restore();
     txt('?', MOVER_PAD[0], MOVER_PAD[1], 34, 'rgba(35,166,224,.6)');
-    // the ghost outline an experienced engineer already sees
+    /* the outline an experienced engineer already sees */
     if (st.ghost){
       g.save(); g.globalAlpha = .30 + Math.sin(T/13)*.10;
       const m = FLU_MOVERS.find(m=>m.id===rig.right);
-      m.draw(MOVER_PAD[0], MOVER_PAD[1]+38, 1.05, {});
+      m.draw(MOVER_PAD[0], MOVER_PAD[1]+40, 1.05, {});
       g.restore();
     }
   }
 
-  // flow inside the finished line
+  /* flow inside the finished line, following the bends */
   const allIn = st.placed.every(Boolean) && st.bolted.every(Boolean);
   if (allIn && st.flow > 0){
-    const pts = [[150,520],[MOVER_PAD[0],520],[390,520],[520,520],[520,380],
-                 [880,380],[880,520],[1040,520],[1130,520]];
+    const pts = [[150,520],[486,520],[520,486],[520,414],[554,380],
+                 [846,380],[880,414],[880,486],[914,520],[1130,520]];
     flowDots(pts, 0.6 + st.flow*3.2, clamp(st.flow*1.4,0,1),
              liquidLine ? 'rgba(120,205,245,.95)' : 'rgba(215,235,245,.75)',
-             liquidLine ? 5 : 4);
+             liquidLine ? 6 : 5);
   }
 
-  // the open leak before anything is connected
+  /* the open stub before anything is connected */
   if (!st.placed[0] && st.phase !== 'run'){
-    if (liquidLine){ emitDrip(MOVER_PAD[0]-40, 532, 1); }
+    if (liquidLine) emitDrip(MOVER_PAD[0]-40, 534, 1);
     else if (Math.random()<.6) emitSteam(MOVER_PAD[0]-40, 520, 1, {vx:1.4, speed:1.3});
   }
 }
@@ -168,6 +253,7 @@ const S_flu = {
       venting:false, tried:false, ghost:false, re:null, done:false
     }));
     this.pts=0; this.safePts=0; this.scored=false;
+    this.quiz=null; this.quizScore=0;
     this.convo=null; this.fadiSaid=false; this.note=null; this.noteT=0;
     this.mutter = mutterFor('flu'); this.mutterT=210;
     after(60, ()=>{ this.mode='free'; });
@@ -175,12 +261,17 @@ const S_flu = {
   exit(){
     if (!this.scored){ this.scored=true;
       award('flu', this.pts, 8); award('saf', this.safePts, 2);
+      if (isHard()) award('flu', this.quizScore || 0, 3);
       if (this.rigs.every(r=>r.done)) G.done.flu = true; }
   },
   camX(){ return clamp(this.px - W/2, 0, FLU_ROOM - W); },
   say(t, frames=220){ this.note = t; this.noteT = frames; },
 
   draw(){
+    if (this.mode === 'quiz' && this.quiz){
+      g.fillStyle='#081c26'; g.fillRect(0,0,W,H);
+      this.quiz.draw(); return;
+    }
     if (this.mode === 'rig'){ this.drawRig(); return; }
     const cam = this.camX();
 
@@ -314,7 +405,15 @@ const S_flu = {
         this.prompt(r.x-cam, 'SPACE   —   work on ' + r.title.split('·')[0].trim(), '#f0a02a');
         if (keyPressed(' ','Enter','Space')) this.openRig(nearR);
       }
-      if (this.px > FLU_ROOM-80 && this.rigs.every(r=>r.done)) go(S_hub, 'fade');
+      if (this.px > FLU_ROOM-80 && this.rigs.every(r=>r.done)){
+        if (isHard() && !G.quizDone.flu){
+          this.quiz = makeTFQuiz('flu', (correct)=>{
+            G.quizDone.flu = true; this.quizScore = correct; this.quiz = null;
+            go(S_hub, 'fade');
+          });
+          this.mode = 'quiz';
+        } else go(S_hub, 'fade');
+      }
     }
 
     if (this.mutterT>0){ this.mutterT -= dt;
@@ -348,16 +447,55 @@ const S_flu = {
   drawRig(){
     const rig = FLU_RIGS[this.ri], st = this.rigs[this.ri];
 
-    /* backdrop */
-    const bg = g.createLinearGradient(0,0,0,H);
-    bg.addColorStop(0,'#0d3145'); bg.addColorStop(1,'#061722');
-    g.fillStyle=bg; g.fillRect(0,0,W,H);
-    for (let i=0;i<W/48;i++){ g.fillStyle = i%2?'rgba(255,255,255,.015)':'rgba(0,0,0,.05)';
-      g.fillRect(i*48,0,24,H); }
-    g.fillStyle='#0a2431'; g.fillRect(0,600,W,H-600);
-    g.fillStyle='rgba(245,181,61,.35)'; g.fillRect(0,600,W,4);
+    /* ---------------- backdrop: a real pipe alley ---------------- */
+    const bg = g.createLinearGradient(0,0,0,600);
+    bg.addColorStop(0,'#0c2a3a');
+    bg.addColorStop(.55,'#0a2331'); bg.addColorStop(1,'#071a26');
+    g.fillStyle=bg; g.fillRect(0,0,W,600);
+    /* corrugated cladding */
+    for (let i=0;i<W/30;i++){
+      g.fillStyle = i%2 ? 'rgba(255,255,255,.018)' : 'rgba(0,0,0,.055)';
+      g.fillRect(i*30, 0, 15, 600);
+    }
+    /* a mezzanine walkway across the top */
+    g.fillStyle='#0f2b3a'; g.fillRect(0, 96, W, 16);
+    g.fillStyle='#16394c'; g.fillRect(0, 112, W, 6);
+    for (let i=0;i<W/26;i++){ g.fillStyle='rgba(255,255,255,.035)'; g.fillRect(i*26, 98, 13, 12); }
+    g.strokeStyle='#1c465c'; g.lineWidth=3;
+    g.beginPath(); g.moveTo(0,62); g.lineTo(W,62); g.stroke();
+    for (let i=0;i<W/90;i++){ g.strokeStyle='#1c465c'; g.lineWidth=3;
+      g.beginPath(); g.moveTo(i*90+20, 62); g.lineTo(i*90+20, 96); g.stroke(); }
+    /* service pipes running overhead */
+    for (let i=0;i<3;i++)
+      pipeSeg(0, 24+i*16, W, 24+i*16, 11,
+              {shell: i%2?'#2d6683':'#336f8d', inner: i%2?'#1c475e':'#215068'});
+    flowDots([[0,24],[W,24]], 1.5, .45, 'rgba(150,235,255,.45)', 3);
 
-    txt(rig.title, W/2, 44, 26, '#f5cf8a');
+    /* lamps over the working area */
+    for (const lx of [330, 700, 1010]){
+      g.fillStyle='#1c3a49'; rr(lx-46, 118, 92, 13, 4); g.fill();
+      g.fillStyle='rgba(225,248,255,.8)'; rr(lx-40, 125, 80, 5, 3); g.fill();
+      const lamp = g.createLinearGradient(0, 130, 0, 600);
+      lamp.addColorStop(0,'rgba(190,235,255,.10)'); lamp.addColorStop(1,'rgba(190,235,255,0)');
+      g.fillStyle = lamp;
+      g.beginPath(); g.moveTo(lx-40,130); g.lineTo(lx+40,130);
+      g.lineTo(lx+150,600); g.lineTo(lx-150,600); g.closePath(); g.fill();
+    }
+
+    /* grated floor */
+    const fl = g.createLinearGradient(0,600,0,H);
+    fl.addColorStop(0,'#163a4c'); fl.addColorStop(1,'#08202c');
+    g.fillStyle=fl; g.fillRect(0,600,W,H-600);
+    g.strokeStyle='rgba(255,255,255,.05)'; g.lineWidth=2;
+    for (let i=0;i<W;i+=22){ g.beginPath(); g.moveTo(i,600); g.lineTo(i-26,H); g.stroke(); }
+    for (let y=612;y<H;y+=24){ g.strokeStyle='rgba(255,255,255,.04)';
+      g.beginPath(); g.moveTo(0,y); g.lineTo(W,y); g.stroke(); }
+    for (let i=0;i<W/22;i++){
+      g.fillStyle = i%2 ? 'rgba(245,181,61,.5)' : 'rgba(26,36,44,.5)';
+      g.fillRect(i*22, 600, 22, 6);
+    }
+
+    txtShadow(rig.title, W/2, 44, 26, '#f5cf8a');
 
     drawRigLine(st, rig);
     drawParts();
@@ -365,16 +503,17 @@ const S_flu = {
     /* --- phase: build the line --- */
     if (st.phase === 'build'){
       // pipe slots
-      PIPE_SEGS.forEach((s,i)=>{
+      PIPE_SEGS.forEach((sg,i)=>{
         if (st.placed[i]) return;
-        const cx = (s.a[0]+s.b[0])/2, cy = (s.a[1]+s.b[1])/2;
-        const w = Math.abs(s.b[0]-s.a[0]) || 34, h = Math.abs(s.b[1]-s.a[1]) || 34;
-        const z = zone(cx-w/2-8, cy-h/2-8, w+16, h+16);
+        const xs = [sg.a[0], sg.b[0], sg.end[0]], ys = [sg.a[1], sg.b[1], sg.end[1]];
+        const x0 = Math.min(...xs)-24, x1 = Math.max(...xs)+24;
+        const y0 = Math.min(...ys)-24, y1 = Math.max(...ys)+24;
+        const z = zone(x0, y0, x1-x0, y1-y0);
         if (z.hover){ g.strokeStyle='#23a6e0'; g.lineWidth=3;
-          rr(cx-w/2-8, cy-h/2-8, w+16, h+16, 8); g.stroke(); }
+          rr(x0, y0, x1-x0, y1-y0, 10); g.stroke(); }
         if (z.clicked){
           st.placed[i]=true; SFX.place();
-          for (let k=0;k<10;k++) spawn({x:cx+rnd(-w/2,w/2), y:cy+rnd(-h/2,h/2),
+          for (let k=0;k<12;k++) spawn({x:rnd(x0,x1), y:rnd(y0,y1),
             vx:rnd(-1.6,1.6), vy:rnd(-1.8,-.3), life:rnd(22,40), max:40,
             size:rnd(5,12), col:'rgba(220,226,214,.5)', kind:'puff'});
         }
@@ -384,14 +523,14 @@ const S_flu = {
       if (allPipes){
         JOINTS.forEach((j,i)=>{
           if (st.bolted[i]) return;
-          const z = zone(j[0]-24, j[1]-24, 48, 48);
+          const z = zone(j.p[0]-26, j.p[1]-26, 52, 52);
           g.save();
           g.strokeStyle = z.hover ? '#f5b53d' : `rgba(245,181,61,${.4+Math.sin(T/10+i)*.2})`;
           g.lineWidth = z.hover ? 4 : 2.6;
-          g.beginPath(); g.arc(j[0], j[1], 24, 0, 7); g.stroke(); g.restore();
+          g.beginPath(); g.arc(j.p[0], j.p[1], 26, 0, 7); g.stroke(); g.restore();
           if (z.clicked){
             st.bolted[i]=true; SFX.bolt();
-            for (let k=0;k<7;k++) emitSpark(j[0], j[1], 1, '#ffd88a');
+            for (let k=0;k<7;k++) emitSpark(j.p[0], j.p[1], 1, '#ffd88a');
           }
         });
       }
@@ -481,9 +620,14 @@ const S_flu = {
       g.fillStyle='rgba(255,255,255,.1)'; rr(W/2-292, 118, 240, 16, 8); g.fill();
       g.fillStyle = st.power>0.82 ? '#ee5f6e' : '#3fd07f';
       rr(W/2-292, 118, 240*clamp(st.power,0,1), 16, 8); g.fill();
-      g.strokeStyle='rgba(63,208,127,.85)'; g.lineWidth=2;
-      g.strokeRect(W/2-292+240*0.55, 115, 240*0.27, 22);
-      txt('hold it in the green', W/2-172, 150, 12, 'rgba(159,216,239,.6)','center',400);
+      if (showGuide('flu')){
+        g.strokeStyle='rgba(63,208,127,.85)'; g.lineWidth=2;
+        g.strokeRect(W/2-292+240*0.55, 115, 240*0.27, 22);
+        txt('hold it in the green', W/2-172, 150, 12, 'rgba(159,216,239,.6)','center',400);
+      } else {
+        txt('no target marked — find the band yourself', W/2-172, 150, 12,
+            'rgba(240,160,42,.7)','center',400);
+      }
 
       txt('FLOW', W/2+92, 100, 13, '#9fd8ef');
       txt(st.flow < .05 ? 'stopped' : Math.round(st.flow*100)+' %',
@@ -577,7 +721,7 @@ const S_flu = {
     /* the engineer's running commentary, as a caption along the bottom */
     if (this.noteT > 0){
       this.noteT -= dt;
-      const cw = 700, cx = W/2 - cw/2, cy = H - 214;
+      const cw = 760, cx = W/2 - cw/2, cy = 186;
       panel(cx, cy, cw, 58, 'rgba(4,18,28,.96)', 'rgba(35,166,224,.55)');
       const nw = 14 + hero.name.length * 8.4;
       g.fillStyle = 'rgba(35,166,224,.92)';
