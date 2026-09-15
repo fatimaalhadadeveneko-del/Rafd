@@ -28,15 +28,23 @@ const REA_CLIENTS = [
     ],
     asks:[
       { key:'type',  q:'Have you run this reaction before?',
+        hardQ:'Tell me how you run it at the moment.',
         a:'Never. It is brand new. I am still changing the recipe every week.',
+        hardA:'I mix it, I wait, I pour it out and wash the flask. Then I change one thing and do it again.',
         good:'New chemistry, recipe still moving. One charge at a time, so we can stop and look. Batch.',
-        bad:'Brand new? Then run it continuously. We will learn faster if it never stops.' },
+        bad:'Brand new? Then run it continuously. We will learn faster if it never stops.',
+        hardBad:'Washing a flask between every run? Wasteful. Get one enormous pipe and never stop it.' },
       { key:'therm', q:'While it runs, does the flask feel warm or cold?',
+        hardQ:'What is the room like while it is running?',
         a:'Warm. Warm enough that I stopped holding it.',
+        hardA:'Stuffy. I have started opening the window halfway through, even in winter.',
         good:'It is giving off heat. Exothermic. We take that heat out with a cooling jacket.',
-        bad:'Warm means it likes heat. Give it more. Heating jacket.' },
+        bad:'Warm means it likes heat. Give it more. Heating jacket.',
+        hardBad:'The room is stealing the heat. We fight back with a heating jacket.' },
       { key:'scale', q:'How much do you actually need?',
+        hardQ:'What does your paperwork allow you to make?',
         a:'Barely anything. Enough to fill one small vial for testing.',
+        hardA:'The regulator has me capped at twenty grams per run until the trial clears.',
         good:'Tiny and experimental. Low rate. We are not building a factory yet.',
         bad:'Small today, huge tomorrow. Order the high rate now and save a trip.' }
     ],
@@ -50,15 +58,23 @@ const REA_CLIENTS = [
     ],
     asks:[
       { key:'type',  q:'You said it needs a catalyst. A solid one?',
+        hardQ:'Walk me through a normal week on that unit.',
         a:'Solid pellets, yes. And the feed has to keep flowing through it, all day.',
+        hardA:'Monday I load a bed of pellets. Friday I unload it. In between the feed never stops once.',
         good:'Solid catalyst with continuous flow through it. That is a packed bed.',
-        bad:'Solid catalyst? Then we stir it in a pot and scoop it out later. Batch.' },
+        bad:'Solid catalyst? Then we stir it in a pot and scoop it out later. Batch.',
+        hardBad:'Loads on Monday, unloads on Friday. That is just one very long batch, surely.' },
       { key:'therm', q:'Does the vessel warm up or go cold while it runs?',
+        hardQ:'Anything odd about the outside of the vessel?',
         a:'It goes cold. The whole skid gets cold enough to sweat.',
+        hardA:'There is frost on the pipework by mid morning. In August. The insulation crew think I am mad.',
         good:'It is drinking heat. Endothermic. We have to feed it, so heating jacket.',
-        bad:'Cold is good, cold is safe. Add more cooling and it will be even safer.' },
+        bad:'Cold is good, cold is safe. Add more cooling and it will be even safer.',
+        hardBad:'Frost in August? Free air conditioning. Add more cooling and sell the surplus.' },
       { key:'scale', q:'What rate does the plant need?',
+        hardQ:'What is downstream of you?',
         a:'Everything you can give me. This runs twenty four hours.',
+        hardA:'A tank farm that takes forty cubic metres an hour and has never once been full.',
         good:'Continuous fuel duty. High rate.',
         bad:'Twenty four hours is a long time, so go low and let it build up slowly.' }
     ],
@@ -72,17 +88,26 @@ const REA_CLIENTS = [
     ],
     asks:[
       { key:'type',  q:'The product builds up and stalls it. Every batch?',
+        hardQ:'What exactly happens when it stalls?',
         a:'Every single one. If I could take the product out as it forms, it would keep going.',
+        hardA:'It runs beautifully for ten minutes and then the rate just dies. If I drain some off and put the rest back, it starts again.',
         good:'Equilibrium held back by product. Pull it out through a membrane as it forms.',
-        bad:'It stalls? Then just run it harder in a bigger pot. Batch, but angry.' },
+        bad:'It stalls? Then just run it harder in a bigger pot. Batch, but angry.',
+        hardBad:'Dies after ten minutes? Then we run it for nine. Batch. Next question.' },
       { key:'therm', q:'Warm or cold while it runs?',
+        hardQ:'What does your cooling water do across the jacket?',
         a:'Mildly warm. Nothing dramatic, but it is definitely warm.',
+        hardA:'It comes out two degrees warmer than it went in. Only two. Every single run.',
         good:'Mildly exothermic. Gentle cooling will hold it steady.',
-        bad:'Mildly warm is basically nothing. Skip the jacket entirely.' },
+        bad:'Mildly warm is basically nothing. Skip the jacket entirely.',
+        hardBad:'Two degrees is a rounding error. Skip the jacket, save my uncle some money.' },
       { key:'scale', q:'How much do you need per run?',
+        hardQ:'What do you actually ship?',
         a:'It is a specialty product. Steady and moderate, not huge.',
+        hardA:'Four drums a month. It has been four drums a month for six years and nobody has asked for more.',
         good:'Specialty duty. Medium rate.',
-        bad:'Specialty means expensive, so make as much as physically possible.' }
+        bad:'Specialty means expensive, so make as much as physically possible.',
+        hardBad:'Four drums a month for six years? No ambition. Maximum rate, starting today.' }
     ],
     right:{ type:'mem', therm:'cool', scale:'med' },
     praise:'Product inhibition, solved by pulling it out as it forms. Membrane reactor, gentle cooling, medium rate.' }
@@ -205,6 +230,7 @@ const S_rea = {
     this.solved = [false,false,false];
     this.pts = 0; this.safePts = 0;
     this.convo = null; this.scored = false;
+    this.quiz = null; this.quizScore = 0;
     this.mutter = mutterFor('rea'); this.mutterT = 210;
     after(60, ()=>{ this.mode='free'; });
   },
@@ -213,6 +239,7 @@ const S_rea = {
       this.scored = true;
       award('rea', this.pts, 9);
       award('saf', this.safePts, 3);
+      if (isHard()) award('rea', this.quizScore || 0, 3);
       if (this.solved.every(Boolean)) G.done.rea = true;
     }
   },
@@ -363,7 +390,15 @@ const S_rea = {
         txt('SPACE   —   talk to ' + NPCS[c.npc].name.split(' ').pop(), c.x-cam, 410, 16, '#eaf4fa');
         if (keyPressed(' ','Enter','Space')) this.openClient(nearC);
       }
-      if (this.px > REA_ROOM-80 && this.solved.every(Boolean)) go(S_hub, 'fade');
+      if (this.px > REA_ROOM-80 && this.solved.every(Boolean)){
+        if (isHard() && !G.quizDone.rea){
+          this.quiz = makeTFQuiz('rea', (correct)=>{
+            G.quizDone.rea = true; this.quizScore = correct; this.quiz = null;
+            go(S_hub, 'fade');
+          });
+          this.mode = 'quiz';
+        } else go(S_hub, 'fade');
+      }
     }
 
     if (this.mutterT>0 && this.mode!=='client'){
@@ -372,6 +407,7 @@ const S_rea = {
     }
 
     if (this.mode==='client') this.drawClient(cam);
+    if (this.mode==='quiz' && this.quiz){ this.quiz.draw(); return; }
 
     if (this.mode==='client' && this.phase==='ask'){
       const c = REA_CLIENTS[this.ci];
@@ -425,7 +461,8 @@ const S_rea = {
         g.strokeStyle = done ? 'rgba(63,208,127,.6)' : z.hover ? '#ee5f6e' : 'rgba(238,95,110,.35)';
         g.lineWidth=2; rr(bx,by,bw,bh,10); g.stroke();
         txt(done ? '✓' : '?', bx+26, by+bh/2, 20, done?'#3fd07f':'#f0b0bc');
-        txt(a.q, bx+52, by+bh/2, 18, done?'rgba(200,230,215,.75)':'#f2e8ea','left',400);
+        txt(isHard() && a.hardQ ? a.hardQ : a.q, bx+52, by+bh/2, 18,
+            done?'rgba(200,230,215,.75)':'#f2e8ea','left',400);
         if (z.clicked && !done) this.ask(a);
       });
 
@@ -508,10 +545,13 @@ const S_rea = {
   ask(a){
     SFX.click();
     this.asked[a.key] = true;
-    const sk = skill('rea');
-    const bad = (sk === 0);
-    this.readLine = { a:a.a, read: bad ? a.bad : a.good, wasBad: bad };
-    this.readT = 460;
+    const bad = isWeak('rea');
+    this.readLine = {
+      a: (isHard() && a.hardA) ? a.hardA : a.a,
+      read: bad ? ((isHard() && a.hardBad) ? a.hardBad : a.bad) : a.good,
+      wasBad: bad
+    };
+    this.readT = 520;
   },
 
   placeOrder(){
