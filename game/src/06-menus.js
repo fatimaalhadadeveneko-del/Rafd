@@ -357,8 +357,8 @@ const S_intro = {
       txt(NPCS.sus.name, sx, H*0.66+124, 14, 'rgba(234,244,250,.5)');
       if (heard){
         const marks = ['?', '?!', '...'];
-        txt(marks[Math.floor(T/40) % 3], sx + 34, H*0.66-92 + Math.sin(T/16)*4,
-            26, '#ee5f6e');
+        txtShadow(marks[Math.floor(T/40) % 3], sx, H*0.66-196 + Math.sin(T/16)*5,
+                  40, '#ee5f6e');
       }
     }
 

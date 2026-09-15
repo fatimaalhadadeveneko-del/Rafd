@@ -29,10 +29,25 @@ Click once when the title card appears so the browser lets the sound play.
 1. The AIChE logo assembles, then the main menu.
 2. **Choose your engineer.** Four of them. Each is strong in some subjects and
    weak in others, and it changes how the game plays, not just the score:
-   * **strong** — they spot the answer immediately and the right option is outlined for you
-   * **average** — no help up front, but they work it out after one wrong attempt
-   * **weak** — no help at all, and they confidently suggest the wrong thing
+   * **strong** — they read the situation correctly and the right option is outlined for you
+   * **middling** — no help up front, but they work it out after one wrong attempt
+   * **weak** — they misread it out loud, suggest the wrong thing with total confidence,
+     lose the green target markings, and have to inspect a feed before the game lets them commit
    * **safety** — a careless engineer argues with the PPE locker three times before putting the goggles on
+
+   The fourth card, **Jojo Tarek, the boss's cousin**, is hard mode. He is bad at
+   everything, turned up in a floral shirt and sandals, and was hired because of
+   his uncle. Picking him changes the game:
+   * no coffee hints anywhere
+   * no green target bands on the power slider or the cooling duty
+   * every feed has to be analysed before you may install anything
+   * a completely different opening conversation with the boss, which
+     **Bassam** from process safety overhears
+   * Bassam then follows you around the yard and blocks the door of each unit
+     room with three true/false questions before he will let you out
+   * the clients in the reactor lab stop handing over the answer and describe
+     their week instead, so you have to infer it
+   * steady state has to be held for longer
 3. Mr. Tarek gives you the morning.
 4. Five stations, in any order:
    * **Separation Techniques Lab** — read five animated feed samples and install the right unit. Wrong units fail in their own way: salt cakes a column solid and splits a seam, a dryer sprays brine over everything, sugar in a reboiler caramelises then carbonises.
@@ -55,6 +70,10 @@ Click once when the title card appears so the browser lets the sound play.
 | Thermodynamics | 10 |
 | Safety | 10 |
 
+In hard mode Bassam's three questions per station are folded into that
+station's subject score, so a good engineer who cannot answer them still
+loses ground.
+
 Safety points come from PPE, relief valves and treating the dangerous skid first.
 They are the smallest slice but they are collected everywhere.
 
@@ -76,6 +95,7 @@ If the booth queue is long, the easiest things to shorten are in `game/src/`:
 * `10-flu.js` — remove the second entry from `FLU_RIGS` to run one line instead of two,
   or shorten `PIPE_SEGS` and `JOINTS` to place fewer pipes and flanges
 * `12-brk.js` — drop entries from `DREAM_Q`
+* `05-state.js` — `TF_QUIZ` holds Bassam's hard-mode questions, three per station
 
 Rebuild afterwards (see below). Nothing else needs changing; the score
 re-weights itself automatically.
