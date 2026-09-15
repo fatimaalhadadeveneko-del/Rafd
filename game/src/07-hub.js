@@ -70,8 +70,16 @@ const S_hub = {
     this.face = 'right'; this.walkT = 0; this.stepT = 0; this.nearS = null;
     if (this.susX === undefined) this.susX = this.px - 180;
     this.susWalk = 0; this.susBubble = 0;
+    /* a unit left with more than one thing wrong lets go shortly after you walk out */
+    this.boomKey = null; this.boomT = 0;
+    if (G.boom){
+      this.boomKey = G.boom; G.boomed[G.boom] = true; G.boom = null;
+      this.boomT = 0;
+      after(48, ()=>{ SFX.boom(); });
+    }
   },
   allDone(){ return STATIONS.every(s => G.done[s.key]); },
+  unitsDone(){ return STATIONS.filter(s=>s.key!=='brk').every(s => G.done[s.key]); },
 
   draw(){
     /* ================= sky ================= */
@@ -130,13 +138,15 @@ const S_hub = {
     }
 
     /* ================= doors ================= */
-    this.nearS = null;
+    this.nearS = null; this.nearLocked = null;
     const DW = 118, DH = 172;
     for (const s of STATIONS){
       const done = !!G.done[s.key];
       const dy = GROUND - DH;
+      const locked = s.key === 'brk' && !this.unitsDone();
       const near = Math.abs(this.px - s.x) < 74 && this.py < 630;
-      if (near && !done) this.nearS = s;
+      if (near && !done && !locked) this.nearS = s;
+      if (near && locked) this.nearLocked = s;
 
       // recessed frame
       g.fillStyle='#0a2433'; rr(s.x-DW/2-9, dy-11, DW+18, DH+11, 7); g.fill();
@@ -144,6 +154,8 @@ const S_hub = {
       const gr = g.createLinearGradient(0, dy, 0, GROUND);
       if (done){ gr.addColorStop(0,'#061c16'); gr.addColorStop(.55,'#0b2b22');
                  gr.addColorStop(1,'rgba(40,120,90,.55)'); }
+      else if (locked){ gr.addColorStop(0,'#0c0d10'); gr.addColorStop(.55,'#131418');
+                        gr.addColorStop(1,'rgba(70,74,84,.35)'); }
       else { gr.addColorStop(0,'#04141e'); gr.addColorStop(.55,'#07202e');
              gr.addColorStop(1,`rgba(46,140,185,${(near?.68:.34)+Math.sin(T/26)*.06})`); }
       g.fillStyle = gr; rr(s.x-DW/2, dy, DW, DH, 5); g.fill();
@@ -165,20 +177,37 @@ const S_hub = {
       g.lineTo(s.x+DW/2+34, GROUND+86); g.lineTo(s.x-DW/2-34, GROUND+86); g.closePath(); g.fill();
       g.restore();
       // frame trim
-      g.strokeStyle = done ? '#3fd07f' : s.col;
-      g.lineWidth = (near && !done) ? 4 : 2.4;
+      g.strokeStyle = done ? '#3fd07f' : locked ? '#6a7080' : s.col;
+      g.lineWidth = (near && !done && !locked) ? 4 : 2.4;
       rr(s.x-DW/2, dy, DW, DH, 5); g.stroke();
+
+      if (locked){
+        // a padlock and a chain across the door
+        g.strokeStyle='#59616e'; g.lineWidth=7; g.lineCap='round';
+        g.beginPath(); g.moveTo(s.x-DW/2+6, dy+DH*0.52); g.lineTo(s.x+DW/2-6, dy+DH*0.46); g.stroke();
+        g.lineWidth=3; g.strokeStyle='#7e8794';
+        g.beginPath(); g.moveTo(s.x-DW/2+6, dy+DH*0.52); g.lineTo(s.x+DW/2-6, dy+DH*0.46); g.stroke();
+        const ly = dy+DH*0.49;
+        g.strokeStyle='#aab2be'; g.lineWidth=5;
+        g.beginPath(); g.arc(s.x, ly-13, 9, Math.PI, 0); g.stroke();
+        g.fillStyle='#c8b45c'; rr(s.x-14, ly-8, 28, 24, 5); g.fill();
+        g.strokeStyle='rgba(0,0,0,.35)'; g.lineWidth=1.6; rr(s.x-14, ly-8, 28, 24, 5); g.stroke();
+        g.fillStyle='#6a5a22'; g.beginPath(); g.arc(s.x, ly+2, 3.4, 0, 7); g.fill();
+        g.fillRect(s.x-1.4, ly+2, 2.8, 8);
+      }
 
       // sign board above the door
       const SW = 176;
       g.save(); g.shadowColor='rgba(0,0,0,.5)'; g.shadowBlur=10; g.shadowOffsetY=3;
       g.fillStyle='rgba(5,22,33,.96)'; rr(s.x-SW/2, dy-58, SW, 44, 7); g.fill();
       g.restore();
-      g.strokeStyle = done ? '#3fd07f' : s.col; g.lineWidth=2; rr(s.x-SW/2, dy-58, SW, 44, 7); g.stroke();
+      g.strokeStyle = done ? '#3fd07f' : locked ? '#6a7080' : s.col;
+      g.lineWidth=2; rr(s.x-SW/2, dy-58, SW, 44, 7); g.stroke();
       const words = s.name.split(' ');
       const cut = words.length > 2 ? words.length-1 : 1;
-      txt(words.slice(0,cut).join(' '), s.x, dy-45, 13, done?'#8fe8b8':'#e2eef5');
-      txt(words.slice(cut).join(' '),   s.x, dy-29, 13, done?'#8fe8b8':'#e2eef5');
+      const sigCol = done ? '#8fe8b8' : locked ? '#8a929e' : '#e2eef5';
+      txt(words.slice(0,cut).join(' '), s.x, dy-45, 13, sigCol);
+      txt(words.slice(cut).join(' '),   s.x, dy-29, 13, sigCol);
       if (done){
         g.fillStyle='#3fd07f'; g.beginPath(); g.arc(s.x+SW/2-15, dy-51, 9, 0, 7); g.fill();
         g.strokeStyle='#04121a'; g.lineWidth=2.4; g.lineCap='round';
@@ -234,6 +263,8 @@ const S_hub = {
     if (keys.ArrowRight||keys.d||keys.D) dx++;
     if (keys.ArrowUp||keys.w||keys.W) dy--;
     if (keys.ArrowDown||keys.s||keys.S) dy++;
+    const booming = this.boomKey !== null && this.boomT < 300;
+    if (booming){ dx = 0; dy = 0; }
     const moving = (dx||dy) && !trans;
     if (dx) this.face = dx>0 ? 'right' : 'left';
     if (moving){
@@ -294,15 +325,92 @@ const S_hub = {
       ppe:{ hat:true, goggles: G.ppe.goggles, coat: G.ppe.coat }
     });
 
-    if (this.nearS){
-      const s = this.nearS, yy = this.py - 218;
+    if (this.nearLocked && !this.nearS){
+      const yy = this.py - 218, cx = clamp(this.px, 196, W-196);
       g.save(); g.shadowColor='rgba(0,0,0,.5)'; g.shadowBlur=12;
-      g.fillStyle='rgba(5,22,33,.96)'; rr(this.px-118, yy-24, 236, 42, 10); g.fill(); g.restore();
-      g.strokeStyle=s.col; g.lineWidth=2.2; rr(this.px-118, yy-24, 236, 42, 10); g.stroke();
-      txt('SPACE   —   go inside', this.px, yy-2, 17, '#eaf4fa');
+      g.fillStyle='rgba(16,16,20,.96)'; rr(cx-186, yy-32, 372, 58, 10); g.fill(); g.restore();
+      g.strokeStyle='#6a7080'; g.lineWidth=2.2; rr(cx-186, yy-32, 372, 58, 10); g.stroke();
+      txt('LOCKED  —  breaks are after the work', cx, yy-12, 16, '#c8ced8');
+      const leftU = STATIONS.filter(s2=>s2.key!=='brk' && !G.done[s2.key]).length;
+      txt(leftU + (leftU===1?' unit still open':' units still open'), cx, yy+11, 14, 'rgba(200,206,216,.6)');
+    }
+
+    if (this.nearS){
+      const s = this.nearS, yy = this.py - 218, cx = clamp(this.px, 128, W-128);
+      g.save(); g.shadowColor='rgba(0,0,0,.5)'; g.shadowBlur=12;
+      g.fillStyle='rgba(5,22,33,.96)'; rr(cx-118, yy-24, 236, 42, 10); g.fill(); g.restore();
+      g.strokeStyle=s.col; g.lineWidth=2.2; rr(cx-118, yy-24, 236, 42, 10); g.stroke();
+      txt('SPACE   —   go inside', cx, yy-2, 17, '#eaf4fa');
       if (keyPressed(' ','Enter','Space')){
         SFX.click(); Hint.begin(s.key); go(s.scene(), 'fade');
       }
+    }
+
+    /* ================= a unit you walked away from lets go ================= */
+    if (this.boomKey !== null){
+      this.boomT += dt;
+      const st = STATIONS.find(s2 => s2.key === this.boomKey) || STATIONS[0];
+      const t = this.boomT;
+      if (t > 48 && t < 62) shake(t < 54 ? 16 : 7);
+      if (t > 48 && t < 58){
+        for (let i=0;i<30;i++) spawn({
+          x: st.x + rnd(-26,26), y: GROUND - 86 + rnd(-30,30),
+          vx: rnd(-4.2,4.2), vy: rnd(-6.5,-0.5), life: rnd(22,52), max:52,
+          size: rnd(10,26), col: i%3 ? 'rgba(255,175,80,.8)' : 'rgba(64,55,50,.7)',
+          kind:'puff', g:.10, drag:.90 });
+      }
+      if (t > 48 && t < 190 && Math.random() < .5)
+        emitSmoke(st.x + rnd(-70,70), GROUND - 150 + rnd(-40,40), 1, 'rgba(60,52,48,.5)');
+      // the flash
+      if (t > 48 && t < 72){
+        g.fillStyle = `rgba(255,214,150,${0.75*(1 - (t-48)/24)})`;
+        g.fillRect(0,0,W,H);
+      }
+      // the fireball itself, bright and brief
+      if (t > 48 && t < 96){
+        const f = (t-48)/48;
+        g.save(); g.globalCompositeOperation = 'lighter';
+        const fb = g.createRadialGradient(st.x, GROUND-96, 4, st.x, GROUND-96, 40 + f*120);
+        fb.addColorStop(0, `rgba(255,248,220,${(1-f)*0.95})`);
+        fb.addColorStop(.35, `rgba(255,178,66,${(1-f)*0.75})`);
+        fb.addColorStop(1, 'rgba(255,110,40,0)');
+        g.fillStyle = fb;
+        g.beginPath(); g.arc(st.x, GROUND-96 - f*60, 40 + f*120, 0, 7); g.fill();
+        g.restore();
+      }
+      // a glow that lingers over that door
+      if (t > 48){
+        const gl = g.createRadialGradient(st.x, GROUND-100, 20, st.x, GROUND-100, 340);
+        gl.addColorStop(0, `rgba(255,140,60,${clamp(.30 - (t-48)/900, 0, .30)})`);
+        gl.addColorStop(1, 'rgba(255,140,60,0)');
+        g.fillStyle = gl; g.fillRect(0,0,W,H);
+      }
+      // what the engineer makes of it
+      if (t > 74 && t < 300){
+        bubble(isWeak(this.boomKey)
+          ? 'I am sure I am imagining things.'
+          : 'What was that?',
+          this.px, this.py - 244, {w:300, size:18, pop:1});
+      }
+      if (t > 300 && this.boomT < 100000){
+        // done; leave the scorch on the yard for the rest of the shift
+        this.boomKey = null;
+      }
+    }
+    for (const k of Object.keys(G.boomed)){
+      const st = STATIONS.find(s2 => s2.key === k);
+      if (!st || (this.boomKey === k && this.boomT < 58)) continue;
+      g.fillStyle='rgba(10,9,8,.30)';
+      g.beginPath(); g.ellipse(st.x, GROUND+30, 74, 15, 0, 0, 7); g.fill();
+      g.fillStyle='rgba(10,9,8,.16)';
+      g.beginPath(); g.ellipse(st.x, GROUND+30, 108, 24, 0, 0, 7); g.fill();
+      // soot smeared up the door frame
+      const so = g.createLinearGradient(0, GROUND, 0, GROUND-150);
+      so.addColorStop(0,'rgba(14,12,11,.5)'); so.addColorStop(1,'rgba(14,12,11,0)');
+      g.fillStyle = so;
+      g.beginPath(); g.moveTo(st.x-58, GROUND); g.lineTo(st.x+58, GROUND);
+      g.lineTo(st.x+26, GROUND-150); g.lineTo(st.x-26, GROUND-150); g.closePath(); g.fill();
+      if (Math.random() < .06) emitSmoke(st.x + rnd(-40,40), GROUND-10, 1, 'rgba(60,52,48,.35)');
     }
 
     vignette(.36);

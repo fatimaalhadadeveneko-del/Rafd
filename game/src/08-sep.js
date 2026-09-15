@@ -483,6 +483,7 @@ const S_sep = {
     this.bayI = -1; this.phase=''; this.pk=0;
     this.choice = null; this.ok = false; this.fail = null;
     this.solved = [false,false,false,false,false];
+    this.leftBad = [null,null,null,null,null];
     this.ppeStage = 0;                    // 0 nothing, 1 goggles, 2 coat
     this.ppeMsg = null; this.ppeMsgT = 0; this.ppeAnim = 0;
     this.convo = null; this.reactT = 0;
@@ -494,7 +495,9 @@ const S_sep = {
   exit(){
     if (!this.scored){
       this.scored = true;
-      award('sep', this.solved.filter(Boolean).length, SEP_BAYS.length);
+      const fixed = this.solved.filter((v,i)=> v && !this.leftBad[i]).length;
+      award('sep', fixed, SEP_BAYS.length);
+      armExplosion('sep');
       award('saf', this.ppeStage, 2);
       if (isHard()) award('sep', this.quizScore || 0, 3);
       if (this.solved.every(Boolean)) G.done.sep = true;
@@ -690,6 +693,15 @@ const S_sep = {
       const consumed = active && (this.phase==='run' || this.phase==='react');
       if (!solved && !consumed) sepSample(b.sample, b.x-70, 560, solved || this.bayKnown(i));
       else if (!solved && consumed) { /* the jar takes its place below */ }
+      else if (this.leftBad[i]){
+        // walked away from: the wrong unit is still sitting there, still wrong
+        const u = sepUnit(this.leftBad[i]);
+        const fail = (b.wrong[this.leftBad[i]] || {}).fail;
+        sepOutcome(fail, this.leftBad[i], b.x+96, 610, 1);
+        sepProduct(b.product, b.x-70, 558, false, fail);
+        g.save(); g.globalAlpha = .55 + Math.sin(T/14)*.2;
+        txt('UNRESOLVED', b.x+96, 470, 15, '#ee5f6e'); g.restore();
+      }
       else {
         // solved: show the chosen unit standing proud
         const u = sepUnit(b.right);
@@ -967,19 +979,22 @@ const S_sep = {
       wrapText(msg, W/2, H-88, 640, 25, 19, '#e4eef4','center',400);
 
       if (this.pk > 60){
-        if (button(this.ok ? 'NEXT SAMPLE' : 'TRY AGAIN', W/2-110, H-40, 220, 34,
-                   {col:this.ok?'#3fd07f':'#ee5f6e', size:16})){
-          if (this.ok){
-            this.solved[this.bayI] = true;
-            this.mode='free'; this.convo=null;
-            if (this.solved.every(Boolean)){
-              toast('All five samples cleared. Head for the exit on the right.');
-            }
-          } else {
+        if (this.ok){
+          if (button('NEXT SAMPLE', W/2-110, H-40, 220, 34, {col:'#3fd07f', size:16}))
+            this.clearBay();
+        } else {
+          /* nobody makes you fix it.  Walking away costs the marks and
+             leaves a fault behind that the unit will not forget. */
+          if (button('TRY AGAIN', W/2-232, H-40, 220, 34, {col:'#ee5f6e', size:16})){
             this.phase='pick'; this.pk=0;
-            // an average engineer works it out after failing once
-            if (skill('sep')===1) hero._sepLearned = true;
           }
+          if (button(leaveLabel('sep'), W/2+12, H-40, 220, 34, {col:'#8a7a5a', size:15})){
+            noteFault('sep');
+            this.leftBad[this.bayI] = this.choice;
+            toast(leaveBlurb('sep'));
+            this.clearBay();
+          }
+          txt(leaveBlurb('sep'), W/2+122, H-4, 12, 'rgba(200,190,160,.55)');
         }
       }
       return;
@@ -1070,6 +1085,17 @@ const S_sep = {
         this.inspected = true; this.revealSaid = false;
         this.phase = 'pick'; SFX.click();
       }
+    }
+  },
+
+  /* leave the bay, fixed or not, and move on */
+  clearBay(){
+    this.solved[this.bayI] = true;
+    this.mode = 'free'; this.convo = null;
+    if (this.solved.every(Boolean)){
+      toast(stationFaults('sep') > 0
+        ? 'That is all of them. Some of them, anyway. Exit is on the right.'
+        : 'All five samples cleared. Head for the exit on the right.');
     }
   },
 

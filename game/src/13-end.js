@@ -12,7 +12,10 @@ function verdictFor(s){
   if (s >= 50) return { k:'training', title:'UNDER SUPERVISION',
     line:'"You stay. You also start training on Monday. Bring a notebook."', col:'#f0a02a' };
   return { k:'fired', title:'FIRED',
-    line:'"I wasted a perfectly good cup of coffee on you this morning."', col:'#ee5f6e' };
+    line: Object.keys(G.boomed).length
+      ? '"Half my refinery is on fire and you walked past it whistling. Out."'
+      : '"I wasted a perfectly good cup of coffee on you this morning."',
+    col:'#ee5f6e' };
 }
 
 const S_end = {
@@ -53,6 +56,13 @@ const S_end = {
     panel(880, 92, 300, 92, 'rgba(245,181,61,.14)', 'rgba(245,181,61,.55)');
     txt('DAYS WITHOUT INCIDENT', 1030, 122, 15, '#f5d78a');
     txt(String(Math.max(0, 1 - Math.min(1, G.blunders))), 1030, 158, 30, '#f5b53d');
+    // whatever you walked away from is still on the incident board
+    const blown = Object.keys(G.boomed).length;
+    if (blown){
+      panel(880, 190, 300, 42, 'rgba(238,95,110,.14)', 'rgba(238,95,110,.55)');
+      txt(blown === 1 ? 'ONE UNIT IS STILL SMOKING' : blown + ' UNITS ARE STILL SMOKING',
+          1030, 216, 14, `rgba(255,150,160,${.7+Math.sin(T/12)*.25})`);
+    }
 
     // desk
     g.fillStyle='#5a3a24'; rr(540, H*0.66-18, 300, 20, 5); g.fill();

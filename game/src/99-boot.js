@@ -4,7 +4,9 @@
 const tapEl = document.getElementById('tapstart');
 
 /* #sep #rea #flu #hea #brk #hub #end jump straight to a scene, for testing
-   and for running a single station at a booth. #mute silences the music.   */
+   and for running a single station at a booth. #mute silences the music.
+   A character id (#layla #omar #yusra #jojo) picks who you are playing, and
+   #alldone marks the four units finished.                                  */
 function devScene(){
   const h = (location.hash || '').slice(1).split(',');
   const map = { sep:()=>S_sep, rea:()=>S_rea, flu:()=>S_flu, hea:()=>S_hea,
@@ -12,6 +14,14 @@ function devScene(){
   let target = null;
   for (const part of h){
     if (part === 'mute' && musicGain) musicGain.gain.value = 0;
+    /* pick an engineer from the URL, so a single station can be shown in
+       hard mode or from a weak character's point of view without clicking through */
+    const who = CHARS.find(c => c.id === part);
+    if (who) hero = who;
+    /* mark the four units finished, to reach the break room or the verdict */
+    if (part === 'alldone'){
+      for (const s of STATIONS) if (s.key !== 'brk') G.done[s.key] = true;
+    }
     if (map[part]) target = map[part]();
   }
   return target;

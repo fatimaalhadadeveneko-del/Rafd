@@ -1885,12 +1885,40 @@ const G = {
   hintUsed: {},              // per station
   blunders: 0,
   quizDone: {},              // station key -> true, hard mode only
+  faults: {},                // station key -> how many faults were left behind
+  boom: null,                // a station key waiting to blow up in the yard
+  boomed: {},                // stations that have already gone off
   reset(){
     for (const k in this.got){ this.got[k]=0; this.maxp[k]=0; }
     this.done = {}; this.ppe = {goggles:false,coat:false,hat:false}; this.ppeTries=0;
     this.sheet=false; this.hintUsed={}; this.blunders=0; this.quizDone={};
+    this.faults = {}; this.boom = null; this.boomed = {};
   }
 };
+
+/* ============================================================
+   Walking away from a mistake.  Nobody makes you fix anything: a weak
+   engineer genuinely cannot see the problem, and everyone else tells
+   themselves they will come back to it.  Neither ever does, and a unit
+   left with two or more faults does not stay quiet about it.
+   ============================================================ */
+function leaveLabel(subject){
+  return isWeak(subject) ? 'LEAVE IT AS IT IS' : 'FIX IT LATER';
+}
+function leaveBlurb(subject){
+  return isWeak(subject)
+    ? 'it looked fine to me'
+    : 'make a note, come back to it';
+}
+function noteFault(station){
+  G.faults[station] = (G.faults[station] || 0) + 1;
+  G.blunders++;
+}
+function stationFaults(station){ return G.faults[station] || 0; }
+/* call as a station hands control back to the yard */
+function armExplosion(station){
+  if (stationFaults(station) >= 2 && !G.boomed[station]) G.boom = station;
+}
 
 /* Hard mode rides on the character you pick: the boss's cousin gets no hints,
    no guide bands, misreads everything, and is followed around by Bassam. */
@@ -2693,8 +2721,16 @@ const S_hub = {
     this.face = 'right'; this.walkT = 0; this.stepT = 0; this.nearS = null;
     if (this.susX === undefined) this.susX = this.px - 180;
     this.susWalk = 0; this.susBubble = 0;
+    /* a unit left with more than one thing wrong lets go shortly after you walk out */
+    this.boomKey = null; this.boomT = 0;
+    if (G.boom){
+      this.boomKey = G.boom; G.boomed[G.boom] = true; G.boom = null;
+      this.boomT = 0;
+      after(48, ()=>{ SFX.boom(); });
+    }
   },
   allDone(){ return STATIONS.every(s => G.done[s.key]); },
+  unitsDone(){ return STATIONS.filter(s=>s.key!=='brk').every(s => G.done[s.key]); },
 
   draw(){
     /* ================= sky ================= */
@@ -2753,13 +2789,15 @@ const S_hub = {
     }
 
     /* ================= doors ================= */
-    this.nearS = null;
+    this.nearS = null; this.nearLocked = null;
     const DW = 118, DH = 172;
     for (const s of STATIONS){
       const done = !!G.done[s.key];
       const dy = GROUND - DH;
+      const locked = s.key === 'brk' && !this.unitsDone();
       const near = Math.abs(this.px - s.x) < 74 && this.py < 630;
-      if (near && !done) this.nearS = s;
+      if (near && !done && !locked) this.nearS = s;
+      if (near && locked) this.nearLocked = s;
 
       // recessed frame
       g.fillStyle='#0a2433'; rr(s.x-DW/2-9, dy-11, DW+18, DH+11, 7); g.fill();
@@ -2767,6 +2805,8 @@ const S_hub = {
       const gr = g.createLinearGradient(0, dy, 0, GROUND);
       if (done){ gr.addColorStop(0,'#061c16'); gr.addColorStop(.55,'#0b2b22');
                  gr.addColorStop(1,'rgba(40,120,90,.55)'); }
+      else if (locked){ gr.addColorStop(0,'#0c0d10'); gr.addColorStop(.55,'#131418');
+                        gr.addColorStop(1,'rgba(70,74,84,.35)'); }
       else { gr.addColorStop(0,'#04141e'); gr.addColorStop(.55,'#07202e');
              gr.addColorStop(1,`rgba(46,140,185,${(near?.68:.34)+Math.sin(T/26)*.06})`); }
       g.fillStyle = gr; rr(s.x-DW/2, dy, DW, DH, 5); g.fill();
@@ -2788,20 +2828,37 @@ const S_hub = {
       g.lineTo(s.x+DW/2+34, GROUND+86); g.lineTo(s.x-DW/2-34, GROUND+86); g.closePath(); g.fill();
       g.restore();
       // frame trim
-      g.strokeStyle = done ? '#3fd07f' : s.col;
-      g.lineWidth = (near && !done) ? 4 : 2.4;
+      g.strokeStyle = done ? '#3fd07f' : locked ? '#6a7080' : s.col;
+      g.lineWidth = (near && !done && !locked) ? 4 : 2.4;
       rr(s.x-DW/2, dy, DW, DH, 5); g.stroke();
+
+      if (locked){
+        // a padlock and a chain across the door
+        g.strokeStyle='#59616e'; g.lineWidth=7; g.lineCap='round';
+        g.beginPath(); g.moveTo(s.x-DW/2+6, dy+DH*0.52); g.lineTo(s.x+DW/2-6, dy+DH*0.46); g.stroke();
+        g.lineWidth=3; g.strokeStyle='#7e8794';
+        g.beginPath(); g.moveTo(s.x-DW/2+6, dy+DH*0.52); g.lineTo(s.x+DW/2-6, dy+DH*0.46); g.stroke();
+        const ly = dy+DH*0.49;
+        g.strokeStyle='#aab2be'; g.lineWidth=5;
+        g.beginPath(); g.arc(s.x, ly-13, 9, Math.PI, 0); g.stroke();
+        g.fillStyle='#c8b45c'; rr(s.x-14, ly-8, 28, 24, 5); g.fill();
+        g.strokeStyle='rgba(0,0,0,.35)'; g.lineWidth=1.6; rr(s.x-14, ly-8, 28, 24, 5); g.stroke();
+        g.fillStyle='#6a5a22'; g.beginPath(); g.arc(s.x, ly+2, 3.4, 0, 7); g.fill();
+        g.fillRect(s.x-1.4, ly+2, 2.8, 8);
+      }
 
       // sign board above the door
       const SW = 176;
       g.save(); g.shadowColor='rgba(0,0,0,.5)'; g.shadowBlur=10; g.shadowOffsetY=3;
       g.fillStyle='rgba(5,22,33,.96)'; rr(s.x-SW/2, dy-58, SW, 44, 7); g.fill();
       g.restore();
-      g.strokeStyle = done ? '#3fd07f' : s.col; g.lineWidth=2; rr(s.x-SW/2, dy-58, SW, 44, 7); g.stroke();
+      g.strokeStyle = done ? '#3fd07f' : locked ? '#6a7080' : s.col;
+      g.lineWidth=2; rr(s.x-SW/2, dy-58, SW, 44, 7); g.stroke();
       const words = s.name.split(' ');
       const cut = words.length > 2 ? words.length-1 : 1;
-      txt(words.slice(0,cut).join(' '), s.x, dy-45, 13, done?'#8fe8b8':'#e2eef5');
-      txt(words.slice(cut).join(' '),   s.x, dy-29, 13, done?'#8fe8b8':'#e2eef5');
+      const sigCol = done ? '#8fe8b8' : locked ? '#8a929e' : '#e2eef5';
+      txt(words.slice(0,cut).join(' '), s.x, dy-45, 13, sigCol);
+      txt(words.slice(cut).join(' '),   s.x, dy-29, 13, sigCol);
       if (done){
         g.fillStyle='#3fd07f'; g.beginPath(); g.arc(s.x+SW/2-15, dy-51, 9, 0, 7); g.fill();
         g.strokeStyle='#04121a'; g.lineWidth=2.4; g.lineCap='round';
@@ -2857,6 +2914,8 @@ const S_hub = {
     if (keys.ArrowRight||keys.d||keys.D) dx++;
     if (keys.ArrowUp||keys.w||keys.W) dy--;
     if (keys.ArrowDown||keys.s||keys.S) dy++;
+    const booming = this.boomKey !== null && this.boomT < 300;
+    if (booming){ dx = 0; dy = 0; }
     const moving = (dx||dy) && !trans;
     if (dx) this.face = dx>0 ? 'right' : 'left';
     if (moving){
@@ -2917,15 +2976,92 @@ const S_hub = {
       ppe:{ hat:true, goggles: G.ppe.goggles, coat: G.ppe.coat }
     });
 
-    if (this.nearS){
-      const s = this.nearS, yy = this.py - 218;
+    if (this.nearLocked && !this.nearS){
+      const yy = this.py - 218, cx = clamp(this.px, 196, W-196);
       g.save(); g.shadowColor='rgba(0,0,0,.5)'; g.shadowBlur=12;
-      g.fillStyle='rgba(5,22,33,.96)'; rr(this.px-118, yy-24, 236, 42, 10); g.fill(); g.restore();
-      g.strokeStyle=s.col; g.lineWidth=2.2; rr(this.px-118, yy-24, 236, 42, 10); g.stroke();
-      txt('SPACE   —   go inside', this.px, yy-2, 17, '#eaf4fa');
+      g.fillStyle='rgba(16,16,20,.96)'; rr(cx-186, yy-32, 372, 58, 10); g.fill(); g.restore();
+      g.strokeStyle='#6a7080'; g.lineWidth=2.2; rr(cx-186, yy-32, 372, 58, 10); g.stroke();
+      txt('LOCKED  —  breaks are after the work', cx, yy-12, 16, '#c8ced8');
+      const leftU = STATIONS.filter(s2=>s2.key!=='brk' && !G.done[s2.key]).length;
+      txt(leftU + (leftU===1?' unit still open':' units still open'), cx, yy+11, 14, 'rgba(200,206,216,.6)');
+    }
+
+    if (this.nearS){
+      const s = this.nearS, yy = this.py - 218, cx = clamp(this.px, 128, W-128);
+      g.save(); g.shadowColor='rgba(0,0,0,.5)'; g.shadowBlur=12;
+      g.fillStyle='rgba(5,22,33,.96)'; rr(cx-118, yy-24, 236, 42, 10); g.fill(); g.restore();
+      g.strokeStyle=s.col; g.lineWidth=2.2; rr(cx-118, yy-24, 236, 42, 10); g.stroke();
+      txt('SPACE   —   go inside', cx, yy-2, 17, '#eaf4fa');
       if (keyPressed(' ','Enter','Space')){
         SFX.click(); Hint.begin(s.key); go(s.scene(), 'fade');
       }
+    }
+
+    /* ================= a unit you walked away from lets go ================= */
+    if (this.boomKey !== null){
+      this.boomT += dt;
+      const st = STATIONS.find(s2 => s2.key === this.boomKey) || STATIONS[0];
+      const t = this.boomT;
+      if (t > 48 && t < 62) shake(t < 54 ? 16 : 7);
+      if (t > 48 && t < 58){
+        for (let i=0;i<30;i++) spawn({
+          x: st.x + rnd(-26,26), y: GROUND - 86 + rnd(-30,30),
+          vx: rnd(-4.2,4.2), vy: rnd(-6.5,-0.5), life: rnd(22,52), max:52,
+          size: rnd(10,26), col: i%3 ? 'rgba(255,175,80,.8)' : 'rgba(64,55,50,.7)',
+          kind:'puff', g:.10, drag:.90 });
+      }
+      if (t > 48 && t < 190 && Math.random() < .5)
+        emitSmoke(st.x + rnd(-70,70), GROUND - 150 + rnd(-40,40), 1, 'rgba(60,52,48,.5)');
+      // the flash
+      if (t > 48 && t < 72){
+        g.fillStyle = `rgba(255,214,150,${0.75*(1 - (t-48)/24)})`;
+        g.fillRect(0,0,W,H);
+      }
+      // the fireball itself, bright and brief
+      if (t > 48 && t < 96){
+        const f = (t-48)/48;
+        g.save(); g.globalCompositeOperation = 'lighter';
+        const fb = g.createRadialGradient(st.x, GROUND-96, 4, st.x, GROUND-96, 40 + f*120);
+        fb.addColorStop(0, `rgba(255,248,220,${(1-f)*0.95})`);
+        fb.addColorStop(.35, `rgba(255,178,66,${(1-f)*0.75})`);
+        fb.addColorStop(1, 'rgba(255,110,40,0)');
+        g.fillStyle = fb;
+        g.beginPath(); g.arc(st.x, GROUND-96 - f*60, 40 + f*120, 0, 7); g.fill();
+        g.restore();
+      }
+      // a glow that lingers over that door
+      if (t > 48){
+        const gl = g.createRadialGradient(st.x, GROUND-100, 20, st.x, GROUND-100, 340);
+        gl.addColorStop(0, `rgba(255,140,60,${clamp(.30 - (t-48)/900, 0, .30)})`);
+        gl.addColorStop(1, 'rgba(255,140,60,0)');
+        g.fillStyle = gl; g.fillRect(0,0,W,H);
+      }
+      // what the engineer makes of it
+      if (t > 74 && t < 300){
+        bubble(isWeak(this.boomKey)
+          ? 'I am sure I am imagining things.'
+          : 'What was that?',
+          this.px, this.py - 244, {w:300, size:18, pop:1});
+      }
+      if (t > 300 && this.boomT < 100000){
+        // done; leave the scorch on the yard for the rest of the shift
+        this.boomKey = null;
+      }
+    }
+    for (const k of Object.keys(G.boomed)){
+      const st = STATIONS.find(s2 => s2.key === k);
+      if (!st || (this.boomKey === k && this.boomT < 58)) continue;
+      g.fillStyle='rgba(10,9,8,.30)';
+      g.beginPath(); g.ellipse(st.x, GROUND+30, 74, 15, 0, 0, 7); g.fill();
+      g.fillStyle='rgba(10,9,8,.16)';
+      g.beginPath(); g.ellipse(st.x, GROUND+30, 108, 24, 0, 0, 7); g.fill();
+      // soot smeared up the door frame
+      const so = g.createLinearGradient(0, GROUND, 0, GROUND-150);
+      so.addColorStop(0,'rgba(14,12,11,.5)'); so.addColorStop(1,'rgba(14,12,11,0)');
+      g.fillStyle = so;
+      g.beginPath(); g.moveTo(st.x-58, GROUND); g.lineTo(st.x+58, GROUND);
+      g.lineTo(st.x+26, GROUND-150); g.lineTo(st.x-26, GROUND-150); g.closePath(); g.fill();
+      if (Math.random() < .06) emitSmoke(st.x + rnd(-40,40), GROUND-10, 1, 'rgba(60,52,48,.35)');
     }
 
     vignette(.36);
@@ -3425,6 +3561,7 @@ const S_sep = {
     this.bayI = -1; this.phase=''; this.pk=0;
     this.choice = null; this.ok = false; this.fail = null;
     this.solved = [false,false,false,false,false];
+    this.leftBad = [null,null,null,null,null];
     this.ppeStage = 0;                    // 0 nothing, 1 goggles, 2 coat
     this.ppeMsg = null; this.ppeMsgT = 0; this.ppeAnim = 0;
     this.convo = null; this.reactT = 0;
@@ -3436,7 +3573,9 @@ const S_sep = {
   exit(){
     if (!this.scored){
       this.scored = true;
-      award('sep', this.solved.filter(Boolean).length, SEP_BAYS.length);
+      const fixed = this.solved.filter((v,i)=> v && !this.leftBad[i]).length;
+      award('sep', fixed, SEP_BAYS.length);
+      armExplosion('sep');
       award('saf', this.ppeStage, 2);
       if (isHard()) award('sep', this.quizScore || 0, 3);
       if (this.solved.every(Boolean)) G.done.sep = true;
@@ -3632,6 +3771,15 @@ const S_sep = {
       const consumed = active && (this.phase==='run' || this.phase==='react');
       if (!solved && !consumed) sepSample(b.sample, b.x-70, 560, solved || this.bayKnown(i));
       else if (!solved && consumed) { /* the jar takes its place below */ }
+      else if (this.leftBad[i]){
+        // walked away from: the wrong unit is still sitting there, still wrong
+        const u = sepUnit(this.leftBad[i]);
+        const fail = (b.wrong[this.leftBad[i]] || {}).fail;
+        sepOutcome(fail, this.leftBad[i], b.x+96, 610, 1);
+        sepProduct(b.product, b.x-70, 558, false, fail);
+        g.save(); g.globalAlpha = .55 + Math.sin(T/14)*.2;
+        txt('UNRESOLVED', b.x+96, 470, 15, '#ee5f6e'); g.restore();
+      }
       else {
         // solved: show the chosen unit standing proud
         const u = sepUnit(b.right);
@@ -3909,19 +4057,22 @@ const S_sep = {
       wrapText(msg, W/2, H-88, 640, 25, 19, '#e4eef4','center',400);
 
       if (this.pk > 60){
-        if (button(this.ok ? 'NEXT SAMPLE' : 'TRY AGAIN', W/2-110, H-40, 220, 34,
-                   {col:this.ok?'#3fd07f':'#ee5f6e', size:16})){
-          if (this.ok){
-            this.solved[this.bayI] = true;
-            this.mode='free'; this.convo=null;
-            if (this.solved.every(Boolean)){
-              toast('All five samples cleared. Head for the exit on the right.');
-            }
-          } else {
+        if (this.ok){
+          if (button('NEXT SAMPLE', W/2-110, H-40, 220, 34, {col:'#3fd07f', size:16}))
+            this.clearBay();
+        } else {
+          /* nobody makes you fix it.  Walking away costs the marks and
+             leaves a fault behind that the unit will not forget. */
+          if (button('TRY AGAIN', W/2-232, H-40, 220, 34, {col:'#ee5f6e', size:16})){
             this.phase='pick'; this.pk=0;
-            // an average engineer works it out after failing once
-            if (skill('sep')===1) hero._sepLearned = true;
           }
+          if (button(leaveLabel('sep'), W/2+12, H-40, 220, 34, {col:'#8a7a5a', size:15})){
+            noteFault('sep');
+            this.leftBad[this.bayI] = this.choice;
+            toast(leaveBlurb('sep'));
+            this.clearBay();
+          }
+          txt(leaveBlurb('sep'), W/2+122, H-4, 12, 'rgba(200,190,160,.55)');
         }
       }
       return;
@@ -4012,6 +4163,17 @@ const S_sep = {
         this.inspected = true; this.revealSaid = false;
         this.phase = 'pick'; SFX.click();
       }
+    }
+  },
+
+  /* leave the bay, fixed or not, and move on */
+  clearBay(){
+    this.solved[this.bayI] = true;
+    this.mode = 'free'; this.convo = null;
+    if (this.solved.every(Boolean)){
+      toast(stationFaults('sep') > 0
+        ? 'That is all of them. Some of them, anyway. Exit is on the right.'
+        : 'All five samples cleared. Head for the exit on the right.');
     }
   },
 
@@ -4259,6 +4421,7 @@ const S_rea = {
     this.sel = { type:null, therm:null, scale:null };
     this.result = null;
     this.solved = [false,false,false];
+    this.leftBad = [null,null,null];
     this.pts = 0; this.safePts = 0;
     this.convo = null; this.scored = false;
     this.quiz = null; this.quizScore = 0;
@@ -4270,6 +4433,7 @@ const S_rea = {
       this.scored = true;
       award('rea', this.pts, 9);
       award('saf', this.safePts, 3);
+      armExplosion('rea');
       if (isHard()) award('rea', this.quizScore || 0, 3);
       if (this.solved.every(Boolean)) G.done.rea = true;
     }
@@ -4345,7 +4509,20 @@ const S_rea = {
       g.beginPath(); g.ellipse(c.x+180, 612, 84, 18, 0, 0, 7); g.stroke(); g.setLineDash([]);
 
       // the installed reactor
-      if (solved){
+      if (solved && this.leftBad[i]){
+        const lb = this.leftBad[i], t = reaType(lb.sel.type) || reaType(c.right.type);
+        t.draw(c.x+180, 612, t.sc, {
+          run: !lb.r.puff, jacket: lb.sel.therm==='none' ? null : lb.sel.therm,
+          frost: lb.r.frost, fire: lb.r.fire, rupture: lb.r.rupture,
+          badProduct: !lb.r.typeOK });
+        if (lb.r.fire) emitFire(c.x+180 + rnd(-30,30), 560, 1);
+        if (lb.r.frost && Math.random()<.3) emitFrost(c.x+180 + rnd(-40,40), rnd(520,600), 1);
+        reaProduct(c.product, c.x+180, 660, lb.r.typeOK ? 'good' : 'wrongtype',
+                   lb.r.scaleOK ? 'ok' : lb.sel.scale === 'high' ? 'high' : 'low');
+        g.save(); g.globalAlpha = .55 + Math.sin(T/14)*.2;
+        txt('UNRESOLVED', c.x+180, 396, 15, '#ee5f6e'); g.restore();
+      }
+      else if (solved){
         const t = reaType(c.right.type);
         t.draw(c.x+180, 612, t.sc, {run:true, jacket:c.right.therm==='none'?null:c.right.therm});
         reaProduct(c.product, c.x+180, 660, 'good', 'ok');
@@ -4560,14 +4737,28 @@ const S_rea = {
       });
       wrapText(r.line, W/2, H-88, 780, 22, 18, '#e8eef2','center',400);
 
-      if (this.pk > 60 && button(r.perfect ? 'NEXT CLIENT' : 'ORDER AGAIN',
-                                 W/2-110, H-44, 220, 34,
-                                 {col:r.perfect?'#3fd07f':'#ee5f6e', size:16})){
+      if (this.pk > 60){
         if (r.perfect){
-          this.solved[this.ci] = true;
-          this.mode='free'; this.convo=null; clearParts();
-          if (this.solved.every(Boolean)) toast('All three clients sorted. Exit is on the right.');
-        } else { this.phase='phone'; this.pk=0; clearParts(); }
+          if (button('NEXT CLIENT', W/2-110, H-44, 220, 34, {col:'#3fd07f', size:16})){
+            this.solved[this.ci] = true;
+            this.mode='free'; this.convo=null; clearParts();
+            if (this.solved.every(Boolean)) toast('All three clients sorted. Exit is on the right.');
+          }
+        } else {
+          if (button('ORDER AGAIN', W/2-232, H-44, 220, 34, {col:'#ee5f6e', size:16})){
+            this.phase='phone'; this.pk=0; clearParts();
+          }
+          /* ship it anyway.  The client will find out eventually. */
+          if (button(leaveLabel('rea'), W/2+12, H-44, 220, 34, {col:'#8a7a5a', size:15})){
+            noteFault('rea');
+            this.leftBad[this.ci] = { sel:{...this.sel}, r:{...r} };
+            this.solved[this.ci] = true;
+            this.mode='free'; this.convo=null; clearParts();
+            toast(leaveBlurb('rea'));
+            if (this.solved.every(Boolean)) toast('All three clients dealt with. Exit is on the right.');
+          }
+          txt(leaveBlurb('rea'), W/2+122, H-8, 12, 'rgba(200,190,160,.55)');
+        }
       }
       return;
     }
@@ -4938,7 +5129,7 @@ const S_flu = {
     this.rigs = FLU_RIGS.map(()=>({
       placed:[false,false,false,false,false], bolted:[false,false,false,false,false,false],
       mover:null, relief:false, flow:0, spin:0, power:0, phase:'build',
-      venting:false, tried:false, ghost:false, re:null, done:false
+      venting:false, tried:false, ghost:false, re:null, done:false, leftBad:false
     }));
     this.pts=0; this.safePts=0; this.scored=false;
     this.quiz=null; this.quizScore=0;
@@ -4949,6 +5140,7 @@ const S_flu = {
   exit(){
     if (!this.scored){ this.scored=true;
       award('flu', this.pts, 8); award('saf', this.safePts, 2);
+      armExplosion('flu');
       if (isHard()) award('flu', this.quizScore || 0, 3);
       if (this.rigs.every(r=>r.done)) G.done.flu = true; }
   },
@@ -5015,8 +5207,12 @@ const S_flu = {
         pipeSeg(r.x-60, 470, r.x+40, 470, 13, mc);
         pipeSeg(r.x+40, 470, r.x+40, 370, 13, mc);
         pipeSeg(r.x+40, 370, r.x+170, 370, 13, mc);
-        flowDots([[r.x-170,470],[r.x+40,470],[r.x+40,370],[r.x+170,370]], 2.4, 1,
-                 r.fluid==='liquid'?'rgba(120,205,245,.9)':'rgba(215,235,245,.7)', 3);
+        if (!st.leftBad){
+          flowDots([[r.x-170,470],[r.x+40,470],[r.x+40,370],[r.x+170,370]], 2.4, 1,
+                   r.fluid==='liquid'?'rgba(120,205,245,.9)':'rgba(215,235,245,.7)', 3);
+        } else if (Math.random()<.3){
+          emitSpark(r.x-60, 470, 1, '#ff9a6a');
+        }
       } else {
         g.save(); g.strokeStyle='rgba(35,166,224,.3)'; g.lineWidth=13;
         g.setLineDash([9,8]);
@@ -5028,8 +5224,12 @@ const S_flu = {
       }
       g.restore();
       panel(r.x-130, 244, 260, 40, 'rgba(5,22,33,.94)',
-            st.done ? 'rgba(63,208,127,.6)' : 'rgba(240,160,42,.55)', 8);
-      txt(r.title, r.x, 264, 15, st.done ? '#8fe8b8' : '#f5cf8a');
+            st.leftBad ? 'rgba(238,95,110,.6)'
+            : st.done ? 'rgba(63,208,127,.6)' : 'rgba(240,160,42,.55)', 8);
+      txt(r.title, r.x, 264, 15,
+          st.leftBad ? '#f0b0bc' : st.done ? '#8fe8b8' : '#f5cf8a');
+      if (st.leftBad) txt('UNRESOLVED', r.x, 300, 14,
+                          `rgba(238,95,110,${.5+Math.sin(T/14)*.25})`);
       if (this.mode==='free' && !st.done && Math.abs(this.px - r.x) < 150) nearR = i;
     });
 
@@ -5370,8 +5570,17 @@ const S_flu = {
           !st.moverOK ? '#ee5f6e' : (st.power>=0.55 && st.power<=0.82) ? '#8fe8b8' : '#f5cf8a',
           'center', 400);
 
-      if (!st.moverOK && button('SWAP THE MACHINE', 40, H-72, 250, 44, {col:'#ee5f6e', size:16})){
-        st.phase='choose'; st.power=0; st.flow=0;
+      if (!st.moverOK){
+        if (button('SWAP THE MACHINE', 40, H-72, 250, 44, {col:'#ee5f6e', size:16})){
+          st.phase='choose'; st.power=0; st.flow=0;
+        }
+        /* or shrug and hand the line over as it is */
+        if (button(leaveLabel('flu'), 304, H-72, 250, 44, {col:'#8a7a5a', size:15})){
+          noteFault('flu');
+          st.leftBad = true;
+          toast(leaveBlurb('flu'));
+          this.finishRig();
+        }
       }
       if (button('STOP', W-190, H-72, 150, 44, {size:16})){ st.phase='build'; st.power=0; st.flow=0; }
     }
@@ -5435,14 +5644,24 @@ const S_flu = {
   finishRig(){
     const st = this.rigs[this.ri], rig = FLU_RIGS[this.ri];
     st.done = true;
-    if (st.moverOK) this.pts += 2;
-    this.pts += 1;                       // held the line in the band
-    if (st.relief) this.safePts += 1;
-    st.phase='build';
-    this.mode='free';
-    SFX.great();
-    toast(rig.title.split('·')[0].trim() + ' is running.');
-    if (this.rigs.every(r=>r.done)) toast('Both lines running. Fadi can breathe again.');
+    const name = rig.title.split('·')[0].trim();
+    if (st.leftBad){
+      /* nothing moved, so nothing is earned */
+      if (st.relief) this.safePts += 1;
+      st.phase='build'; this.mode='free'; SFX.bad();
+      toast(name + ' is still dead. You walked away from it.');
+    } else {
+      if (st.moverOK) this.pts += 2;
+      this.pts += 1;                     // held the line in the band
+      if (st.relief) this.safePts += 1;
+      st.phase='build'; this.mode='free'; SFX.great();
+      toast(name + ' is running.');
+    }
+    if (this.rigs.every(r=>r.done)){
+      toast(this.rigs.some(r=>r.leftBad)
+        ? 'Fadi is looking at the line you gave up on.'
+        : 'Both lines running. Fadi can breathe again.');
+    }
   }
 };
 
@@ -5473,6 +5692,8 @@ const HEA_PATH = [
     why:'The fluid carries the heat away with it. Convection.' }
 ];
 const HEA_MODES = ['conduction','convection','radiation'];
+/* the analyser terminal stands between the two skids, always reachable */
+const HEA_KIOSK = 668;
 
 /* one segment of the heat-path cross-section */
 function pathArt(kind, x, y, w, h, live){
@@ -5576,6 +5797,7 @@ const S_hea = {
     this.trim = 0.2; this.trimDone = false;
     this.pts = 0; this.safePts = 0; this.scored = false;
     this.quiz = null; this.quizScore = 0;
+    this.bad = null; this.pathDone = false;
     this.note = null; this.noteT = 0;
     this.mutter = mutterFor('hea'); this.mutterT = 210;
     after(60, ()=>{ this.mode='free'; });
@@ -5584,10 +5806,11 @@ const S_hea = {
     if (!this.scored){ this.scored = true;
       award('hea', this.pts, 7); award('saf', this.safePts, 1);
       if (isHard()) award('hea', this.quizScore || 0, 3);
-      if (this.trimDone) G.done.hea = true; }
+      if (this.trimDone) G.done.hea = true;
+      armExplosion('hea'); }
   },
   say(t, f=240){ this.note=t; this.noteT=f; },
-  bothFixed(){ return this.st.every(s=>s.device && s.ok); },
+  bothFixed(){ return this.st.every(s=>s.device && (s.ok || s.leftBad)); },
 
   draw(){
     if (this.mode === 'quiz' && this.quiz){
@@ -5680,8 +5903,46 @@ const S_hea = {
         txt('?', p.x+180, 574, 30, 'rgba(245,181,61,.65)');
       }
 
-      if (this.mode==='free' && !st.ok && Math.abs(this.px - p.x) < 150) nearP = i;
+      if (st.leftBad){
+        const bl = .45 + Math.sin(T/9 + i)*.35;
+        panel(p.x-96, 486, 192, 30, 'rgba(38,8,10,.94)', `rgba(238,95,110,${bl})`, 7);
+        txt('UNRESOLVED', p.x, 500, 15, `rgba(255,150,160,${.55+bl*.45})`);
+      }
+
+      if (this.mode==='free' && !st.ok && !st.leftBad && Math.abs(this.px - p.x) < 150) nearP = i;
     });
+
+    /* ---------------- the thermal path analyser, bolted to the hall wall ---------------- */
+    const KX = HEA_KIOSK;
+    const nearK = this.mode==='free' && Math.abs(this.px - KX) < 120;
+    {
+      // pedestal
+      g.fillStyle='#1b1410'; rr(KX-34, 556, 68, 60, 5); g.fill();
+      g.fillStyle='rgba(0,0,0,.35)'; rr(KX-46, 604, 92, 14, 4); g.fill();
+      g.fillStyle='#2a1d16'; rr(KX-9, 470, 18, 92, 4); g.fill();
+      // bezel
+      g.save(); g.shadowColor='rgba(0,0,0,.55)'; g.shadowBlur=18; g.shadowOffsetY=7;
+      g.fillStyle='#15191d'; rr(KX-118, 322, 236, 156, 11); g.fill(); g.restore();
+      g.strokeStyle = nearK ? '#35c8f0' : '#2b3239'; g.lineWidth = nearK ? 3 : 2.4;
+      rr(KX-118, 322, 236, 156, 11); g.stroke();
+      // screen
+      g.save(); g.beginPath(); rr(KX-106, 332, 212, 122, 7); g.clip();
+      const sg = g.createLinearGradient(0,332,0,454);
+      sg.addColorStop(0,'#0b2231'); sg.addColorStop(1,'#061119');
+      g.fillStyle=sg; g.fillRect(KX-106,332,212,122);
+      // a looping little cross-section: fire | gap | wall | film | flow
+      pathArt(Math.floor(T/110)%4, KX-98, 356, 196, 88, true);
+      for (let i=0;i<62;i++){ g.fillStyle='rgba(0,0,0,.14)'; g.fillRect(KX-106, 332+i*2, 212, 1); }
+      g.restore();
+      g.strokeStyle='rgba(120,160,185,.3)'; g.lineWidth=1.6; rr(KX-106, 332, 212, 122, 7); g.stroke();
+      txt('THERMAL PATH ANALYSER', KX, 344, 12, 'rgba(160,215,240,.8)');
+      txt(this.pathDone ? 'LOGGED' : 'AWAITING TAGS', KX, 468, 12,
+          this.pathDone ? 'rgba(143,232,184,.9)' : `rgba(245,207,138,${.55+Math.sin(T/10)*.35})`);
+      if (!this.pathDone){
+        g.fillStyle=`rgba(53,200,240,${.10+Math.sin(T/13)*.06})`;
+        g.beginPath(); g.moveTo(KX-118,322); g.lineTo(KX+118,322); g.lineTo(KX+210,H); g.lineTo(KX-210,H); g.fill();
+      }
+    }
 
     drawParts();
     drawPerson(hero, this.px, this.py, 2.0, {
@@ -5714,10 +5975,20 @@ const S_hea = {
         txt('SPACE   —   deal with ' + p.name, p.x, 492, 16, '#eaf4fa');
         if (keyPressed(' ','Enter','Space')) this.openPlant(nearP);
       }
-      if (this.bothFixed() && !this.pathDone){
-        panel(W/2-260, 664, 520, 44, 'rgba(8,4,4,.96)', '#f5b53d', 10);
-        txt('SPACE  —  both skids steady, now trace where the heat goes', W/2, 686, 17, '#f5cf8a','center',400);
+      if (nearP < 0 && nearK && !this.pathDone && !this.bothFixed()){
+        panel(HEA_KIOSK-250, 664, 500, 44, 'rgba(8,4,4,.96)', 'rgba(120,160,185,.5)', 10);
+        txt('the analyser is live, but settle both skids first',
+            HEA_KIOSK, 686, 17, 'rgba(180,205,220,.85)','center',400);
+      }
+      if (nearP < 0 && nearK && !this.pathDone && this.bothFixed()){
+        panel(HEA_KIOSK-260, 664, 520, 44, 'rgba(8,4,4,.96)', '#35c8f0', 10);
+        txt('SPACE  —  read the analyser and trace where the heat goes',
+            HEA_KIOSK, 686, 17, '#9fd8ef','center',400);
         if (keyPressed(' ','Enter','Space')) { this.mode='path'; SFX.click(); }
+      } else if (nearP < 0 && nearK && this.pathDone && !this.trimDone){
+        panel(HEA_KIOSK-240, 664, 480, 44, 'rgba(8,4,4,.96)', '#f5b53d', 10);
+        txt('SPACE  —  back to the cooling trim', HEA_KIOSK, 686, 17, '#f5cf8a','center',400);
+        if (keyPressed(' ','Enter','Space')) { this.mode='trim'; SFX.click(); }
       }
     }
 
@@ -5777,6 +6048,53 @@ const S_hea = {
       if (button('NOT YET', W/2-90, H-56, 180, 40, {size:16})) this.mode='free';
     }
 
+    /* ---------------- it went wrong: fix it, or walk away from it ---------------- */
+    if (this.mode === 'fail' && this.bad !== null){
+      const p = HEA_PLANTS[this.bad], st = this.st[this.bad];
+      shade(.82);
+      txt(p.name + '  —  THAT MADE IT WORSE', W/2, 96, 30, '#ee5f6e');
+      wrapText(p.wrongLine, W/2, 148, 820, 26, 20, '#f0b8be', 'center', 400);
+
+      // the skid, still doing the wrong thing
+      const hotNow = p.need === 'cool';
+      g.fillStyle = hotNow ? '#5a2a1c' : '#1d3a52';
+      rr(W/2-180, 214, 360, 240, 12); g.fill();
+      g.strokeStyle = '#ee5f6e'; g.lineWidth=3; rr(W/2-180, 214, 360, 240, 12); g.stroke();
+      g.save(); g.beginPath(); rr(W/2-176, 218, 352, 232, 10); g.clip();
+      g.fillStyle='rgba(0,0,0,.3)'; g.fillRect(W/2-176,218,352,232);
+      for (let v=0;v<2;v++){
+        const vx = W/2 - 76 + v*152;
+        g.fillStyle = hotNow ? '#b0603c' : '#7fa8c8';
+        rr(vx-36, 252, 72, 190, 9); g.fill();
+        g.fillStyle='rgba(0,0,0,.2)'; rr(vx+12, 252, 24, 190, 8); g.fill();
+      }
+      if (hotNow && Math.random()<.65) emitSmoke(W/2+rnd(-130,130), 232, 1, 'rgba(90,50,40,.5)');
+      if (!hotNow && Math.random()<.5) emitFrost(W/2+rnd(-150,150), rnd(252,442), 1);
+      g.restore();
+      if (st.device === 'heat') unitHeater(W/2+250, 452, 1.15, {run:true});
+      else                      unitCooler(W/2+250, 452, 1.15, {run:true});
+      drawParts();
+
+      if (button('TAKE IT OFF AND TRY AGAIN', W/2-352, H-82, 330, 44,
+                 {col:'#35c8f0', size:17})){
+        st.device = null; st.ok = false; st.leftBad = false;
+        this.bad = null; this.mode='plant'; SFX.click();
+      }
+      if (button(leaveLabel('hea'), W/2+22, H-82, 330, 44, {col:'#8a7a5a', size:17})){
+        st.leftBad = true;
+        noteFault('hea');
+        toast(leaveBlurb('hea'));
+        this.bad = null; this.mode='free';
+        this.say(isWeak('hea')
+          ? 'It has settled down. Probably. I will not look at it again.'
+          : 'Noted on the board. Somebody will get to it before the shift ends.');
+      }
+      txt(isWeak('hea')
+          ? 'nobody has said anything, so it is presumably fine'
+          : 'a skid left wrong is a skid that stays wrong',
+          W/2, H-20, 15, 'rgba(232,216,204,.55)');
+    }
+
     if (this.noteT > 0){
       this.noteT -= dt;
       const cw=720, cx=W/2-cw/2, cy=H-128;
@@ -5816,9 +6134,8 @@ const S_hea = {
         toast('Hot line first, next time.');
       }
     }
-    if (st.ok){ this.pts += 1; SFX.good(); }
-    else { SFX.bad(); G.blunders++; this.say(p.wrongLine); }
-    this.mode='free';
+    if (st.ok){ this.pts += 1; SFX.good(); this.mode='free'; }
+    else { SFX.bad(); this.noteT = 0; this.bad = this.pi; this.mode='fail'; }
   },
 
   /* ---------------- heat path quiz, on the hall's wall monitor ---------------- */
@@ -6704,7 +7021,10 @@ function verdictFor(s){
   if (s >= 50) return { k:'training', title:'UNDER SUPERVISION',
     line:'"You stay. You also start training on Monday. Bring a notebook."', col:'#f0a02a' };
   return { k:'fired', title:'FIRED',
-    line:'"I wasted a perfectly good cup of coffee on you this morning."', col:'#ee5f6e' };
+    line: Object.keys(G.boomed).length
+      ? '"Half my refinery is on fire and you walked past it whistling. Out."'
+      : '"I wasted a perfectly good cup of coffee on you this morning."',
+    col:'#ee5f6e' };
 }
 
 const S_end = {
@@ -6745,6 +7065,13 @@ const S_end = {
     panel(880, 92, 300, 92, 'rgba(245,181,61,.14)', 'rgba(245,181,61,.55)');
     txt('DAYS WITHOUT INCIDENT', 1030, 122, 15, '#f5d78a');
     txt(String(Math.max(0, 1 - Math.min(1, G.blunders))), 1030, 158, 30, '#f5b53d');
+    // whatever you walked away from is still on the incident board
+    const blown = Object.keys(G.boomed).length;
+    if (blown){
+      panel(880, 190, 300, 42, 'rgba(238,95,110,.14)', 'rgba(238,95,110,.55)');
+      txt(blown === 1 ? 'ONE UNIT IS STILL SMOKING' : blown + ' UNITS ARE STILL SMOKING',
+          1030, 216, 14, `rgba(255,150,160,${.7+Math.sin(T/12)*.25})`);
+    }
 
     // desk
     g.fillStyle='#5a3a24'; rr(540, H*0.66-18, 300, 20, 5); g.fill();
@@ -7004,7 +7331,9 @@ const S_end = {
 const tapEl = document.getElementById('tapstart');
 
 /* #sep #rea #flu #hea #brk #hub #end jump straight to a scene, for testing
-   and for running a single station at a booth. #mute silences the music.   */
+   and for running a single station at a booth. #mute silences the music.
+   A character id (#layla #omar #yusra #jojo) picks who you are playing, and
+   #alldone marks the four units finished.                                  */
 function devScene(){
   const h = (location.hash || '').slice(1).split(',');
   const map = { sep:()=>S_sep, rea:()=>S_rea, flu:()=>S_flu, hea:()=>S_hea,
@@ -7012,6 +7341,14 @@ function devScene(){
   let target = null;
   for (const part of h){
     if (part === 'mute' && musicGain) musicGain.gain.value = 0;
+    /* pick an engineer from the URL, so a single station can be shown in
+       hard mode or from a weak character's point of view without clicking through */
+    const who = CHARS.find(c => c.id === part);
+    if (who) hero = who;
+    /* mark the four units finished, to reach the break room or the verdict */
+    if (part === 'alldone'){
+      for (const s of STATIONS) if (s.key !== 'brk') G.done[s.key] = true;
+    }
     if (map[part]) target = map[part]();
   }
   return target;

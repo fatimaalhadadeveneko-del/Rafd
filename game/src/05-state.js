@@ -16,12 +16,40 @@ const G = {
   hintUsed: {},              // per station
   blunders: 0,
   quizDone: {},              // station key -> true, hard mode only
+  faults: {},                // station key -> how many faults were left behind
+  boom: null,                // a station key waiting to blow up in the yard
+  boomed: {},                // stations that have already gone off
   reset(){
     for (const k in this.got){ this.got[k]=0; this.maxp[k]=0; }
     this.done = {}; this.ppe = {goggles:false,coat:false,hat:false}; this.ppeTries=0;
     this.sheet=false; this.hintUsed={}; this.blunders=0; this.quizDone={};
+    this.faults = {}; this.boom = null; this.boomed = {};
   }
 };
+
+/* ============================================================
+   Walking away from a mistake.  Nobody makes you fix anything: a weak
+   engineer genuinely cannot see the problem, and everyone else tells
+   themselves they will come back to it.  Neither ever does, and a unit
+   left with two or more faults does not stay quiet about it.
+   ============================================================ */
+function leaveLabel(subject){
+  return isWeak(subject) ? 'LEAVE IT AS IT IS' : 'FIX IT LATER';
+}
+function leaveBlurb(subject){
+  return isWeak(subject)
+    ? 'it looked fine to me'
+    : 'make a note, come back to it';
+}
+function noteFault(station){
+  G.faults[station] = (G.faults[station] || 0) + 1;
+  G.blunders++;
+}
+function stationFaults(station){ return G.faults[station] || 0; }
+/* call as a station hands control back to the yard */
+function armExplosion(station){
+  if (stationFaults(station) >= 2 && !G.boomed[station]) G.boom = station;
+}
 
 /* Hard mode rides on the character you pick: the boss's cousin gets no hints,
    no guide bands, misreads everything, and is followed around by Bassam. */

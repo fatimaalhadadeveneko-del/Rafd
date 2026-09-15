@@ -230,6 +230,7 @@ const S_rea = {
     this.sel = { type:null, therm:null, scale:null };
     this.result = null;
     this.solved = [false,false,false];
+    this.leftBad = [null,null,null];
     this.pts = 0; this.safePts = 0;
     this.convo = null; this.scored = false;
     this.quiz = null; this.quizScore = 0;
@@ -241,6 +242,7 @@ const S_rea = {
       this.scored = true;
       award('rea', this.pts, 9);
       award('saf', this.safePts, 3);
+      armExplosion('rea');
       if (isHard()) award('rea', this.quizScore || 0, 3);
       if (this.solved.every(Boolean)) G.done.rea = true;
     }
@@ -316,7 +318,20 @@ const S_rea = {
       g.beginPath(); g.ellipse(c.x+180, 612, 84, 18, 0, 0, 7); g.stroke(); g.setLineDash([]);
 
       // the installed reactor
-      if (solved){
+      if (solved && this.leftBad[i]){
+        const lb = this.leftBad[i], t = reaType(lb.sel.type) || reaType(c.right.type);
+        t.draw(c.x+180, 612, t.sc, {
+          run: !lb.r.puff, jacket: lb.sel.therm==='none' ? null : lb.sel.therm,
+          frost: lb.r.frost, fire: lb.r.fire, rupture: lb.r.rupture,
+          badProduct: !lb.r.typeOK });
+        if (lb.r.fire) emitFire(c.x+180 + rnd(-30,30), 560, 1);
+        if (lb.r.frost && Math.random()<.3) emitFrost(c.x+180 + rnd(-40,40), rnd(520,600), 1);
+        reaProduct(c.product, c.x+180, 660, lb.r.typeOK ? 'good' : 'wrongtype',
+                   lb.r.scaleOK ? 'ok' : lb.sel.scale === 'high' ? 'high' : 'low');
+        g.save(); g.globalAlpha = .55 + Math.sin(T/14)*.2;
+        txt('UNRESOLVED', c.x+180, 396, 15, '#ee5f6e'); g.restore();
+      }
+      else if (solved){
         const t = reaType(c.right.type);
         t.draw(c.x+180, 612, t.sc, {run:true, jacket:c.right.therm==='none'?null:c.right.therm});
         reaProduct(c.product, c.x+180, 660, 'good', 'ok');
@@ -531,14 +546,28 @@ const S_rea = {
       });
       wrapText(r.line, W/2, H-88, 780, 22, 18, '#e8eef2','center',400);
 
-      if (this.pk > 60 && button(r.perfect ? 'NEXT CLIENT' : 'ORDER AGAIN',
-                                 W/2-110, H-44, 220, 34,
-                                 {col:r.perfect?'#3fd07f':'#ee5f6e', size:16})){
+      if (this.pk > 60){
         if (r.perfect){
-          this.solved[this.ci] = true;
-          this.mode='free'; this.convo=null; clearParts();
-          if (this.solved.every(Boolean)) toast('All three clients sorted. Exit is on the right.');
-        } else { this.phase='phone'; this.pk=0; clearParts(); }
+          if (button('NEXT CLIENT', W/2-110, H-44, 220, 34, {col:'#3fd07f', size:16})){
+            this.solved[this.ci] = true;
+            this.mode='free'; this.convo=null; clearParts();
+            if (this.solved.every(Boolean)) toast('All three clients sorted. Exit is on the right.');
+          }
+        } else {
+          if (button('ORDER AGAIN', W/2-232, H-44, 220, 34, {col:'#ee5f6e', size:16})){
+            this.phase='phone'; this.pk=0; clearParts();
+          }
+          /* ship it anyway.  The client will find out eventually. */
+          if (button(leaveLabel('rea'), W/2+12, H-44, 220, 34, {col:'#8a7a5a', size:15})){
+            noteFault('rea');
+            this.leftBad[this.ci] = { sel:{...this.sel}, r:{...r} };
+            this.solved[this.ci] = true;
+            this.mode='free'; this.convo=null; clearParts();
+            toast(leaveBlurb('rea'));
+            if (this.solved.every(Boolean)) toast('All three clients dealt with. Exit is on the right.');
+          }
+          txt(leaveBlurb('rea'), W/2+122, H-8, 12, 'rgba(200,190,160,.55)');
+        }
       }
       return;
     }

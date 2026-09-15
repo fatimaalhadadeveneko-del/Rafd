@@ -23,6 +23,8 @@ const HEA_PATH = [
     why:'The fluid carries the heat away with it. Convection.' }
 ];
 const HEA_MODES = ['conduction','convection','radiation'];
+/* the analyser terminal stands between the two skids, always reachable */
+const HEA_KIOSK = 668;
 
 /* one segment of the heat-path cross-section */
 function pathArt(kind, x, y, w, h, live){
@@ -126,6 +128,7 @@ const S_hea = {
     this.trim = 0.2; this.trimDone = false;
     this.pts = 0; this.safePts = 0; this.scored = false;
     this.quiz = null; this.quizScore = 0;
+    this.bad = null; this.pathDone = false;
     this.note = null; this.noteT = 0;
     this.mutter = mutterFor('hea'); this.mutterT = 210;
     after(60, ()=>{ this.mode='free'; });
@@ -134,10 +137,11 @@ const S_hea = {
     if (!this.scored){ this.scored = true;
       award('hea', this.pts, 7); award('saf', this.safePts, 1);
       if (isHard()) award('hea', this.quizScore || 0, 3);
-      if (this.trimDone) G.done.hea = true; }
+      if (this.trimDone) G.done.hea = true;
+      armExplosion('hea'); }
   },
   say(t, f=240){ this.note=t; this.noteT=f; },
-  bothFixed(){ return this.st.every(s=>s.device && s.ok); },
+  bothFixed(){ return this.st.every(s=>s.device && (s.ok || s.leftBad)); },
 
   draw(){
     if (this.mode === 'quiz' && this.quiz){
@@ -230,8 +234,46 @@ const S_hea = {
         txt('?', p.x+180, 574, 30, 'rgba(245,181,61,.65)');
       }
 
-      if (this.mode==='free' && !st.ok && Math.abs(this.px - p.x) < 150) nearP = i;
+      if (st.leftBad){
+        const bl = .45 + Math.sin(T/9 + i)*.35;
+        panel(p.x-96, 486, 192, 30, 'rgba(38,8,10,.94)', `rgba(238,95,110,${bl})`, 7);
+        txt('UNRESOLVED', p.x, 500, 15, `rgba(255,150,160,${.55+bl*.45})`);
+      }
+
+      if (this.mode==='free' && !st.ok && !st.leftBad && Math.abs(this.px - p.x) < 150) nearP = i;
     });
+
+    /* ---------------- the thermal path analyser, bolted to the hall wall ---------------- */
+    const KX = HEA_KIOSK;
+    const nearK = this.mode==='free' && Math.abs(this.px - KX) < 120;
+    {
+      // pedestal
+      g.fillStyle='#1b1410'; rr(KX-34, 556, 68, 60, 5); g.fill();
+      g.fillStyle='rgba(0,0,0,.35)'; rr(KX-46, 604, 92, 14, 4); g.fill();
+      g.fillStyle='#2a1d16'; rr(KX-9, 470, 18, 92, 4); g.fill();
+      // bezel
+      g.save(); g.shadowColor='rgba(0,0,0,.55)'; g.shadowBlur=18; g.shadowOffsetY=7;
+      g.fillStyle='#15191d'; rr(KX-118, 322, 236, 156, 11); g.fill(); g.restore();
+      g.strokeStyle = nearK ? '#35c8f0' : '#2b3239'; g.lineWidth = nearK ? 3 : 2.4;
+      rr(KX-118, 322, 236, 156, 11); g.stroke();
+      // screen
+      g.save(); g.beginPath(); rr(KX-106, 332, 212, 122, 7); g.clip();
+      const sg = g.createLinearGradient(0,332,0,454);
+      sg.addColorStop(0,'#0b2231'); sg.addColorStop(1,'#061119');
+      g.fillStyle=sg; g.fillRect(KX-106,332,212,122);
+      // a looping little cross-section: fire | gap | wall | film | flow
+      pathArt(Math.floor(T/110)%4, KX-98, 356, 196, 88, true);
+      for (let i=0;i<62;i++){ g.fillStyle='rgba(0,0,0,.14)'; g.fillRect(KX-106, 332+i*2, 212, 1); }
+      g.restore();
+      g.strokeStyle='rgba(120,160,185,.3)'; g.lineWidth=1.6; rr(KX-106, 332, 212, 122, 7); g.stroke();
+      txt('THERMAL PATH ANALYSER', KX, 344, 12, 'rgba(160,215,240,.8)');
+      txt(this.pathDone ? 'LOGGED' : 'AWAITING TAGS', KX, 468, 12,
+          this.pathDone ? 'rgba(143,232,184,.9)' : `rgba(245,207,138,${.55+Math.sin(T/10)*.35})`);
+      if (!this.pathDone){
+        g.fillStyle=`rgba(53,200,240,${.10+Math.sin(T/13)*.06})`;
+        g.beginPath(); g.moveTo(KX-118,322); g.lineTo(KX+118,322); g.lineTo(KX+210,H); g.lineTo(KX-210,H); g.fill();
+      }
+    }
 
     drawParts();
     drawPerson(hero, this.px, this.py, 2.0, {
@@ -264,10 +306,20 @@ const S_hea = {
         txt('SPACE   —   deal with ' + p.name, p.x, 492, 16, '#eaf4fa');
         if (keyPressed(' ','Enter','Space')) this.openPlant(nearP);
       }
-      if (this.bothFixed() && !this.pathDone){
-        panel(W/2-260, 664, 520, 44, 'rgba(8,4,4,.96)', '#f5b53d', 10);
-        txt('SPACE  —  both skids steady, now trace where the heat goes', W/2, 686, 17, '#f5cf8a','center',400);
+      if (nearP < 0 && nearK && !this.pathDone && !this.bothFixed()){
+        panel(HEA_KIOSK-250, 664, 500, 44, 'rgba(8,4,4,.96)', 'rgba(120,160,185,.5)', 10);
+        txt('the analyser is live, but settle both skids first',
+            HEA_KIOSK, 686, 17, 'rgba(180,205,220,.85)','center',400);
+      }
+      if (nearP < 0 && nearK && !this.pathDone && this.bothFixed()){
+        panel(HEA_KIOSK-260, 664, 520, 44, 'rgba(8,4,4,.96)', '#35c8f0', 10);
+        txt('SPACE  —  read the analyser and trace where the heat goes',
+            HEA_KIOSK, 686, 17, '#9fd8ef','center',400);
         if (keyPressed(' ','Enter','Space')) { this.mode='path'; SFX.click(); }
+      } else if (nearP < 0 && nearK && this.pathDone && !this.trimDone){
+        panel(HEA_KIOSK-240, 664, 480, 44, 'rgba(8,4,4,.96)', '#f5b53d', 10);
+        txt('SPACE  —  back to the cooling trim', HEA_KIOSK, 686, 17, '#f5cf8a','center',400);
+        if (keyPressed(' ','Enter','Space')) { this.mode='trim'; SFX.click(); }
       }
     }
 
@@ -327,6 +379,53 @@ const S_hea = {
       if (button('NOT YET', W/2-90, H-56, 180, 40, {size:16})) this.mode='free';
     }
 
+    /* ---------------- it went wrong: fix it, or walk away from it ---------------- */
+    if (this.mode === 'fail' && this.bad !== null){
+      const p = HEA_PLANTS[this.bad], st = this.st[this.bad];
+      shade(.82);
+      txt(p.name + '  —  THAT MADE IT WORSE', W/2, 96, 30, '#ee5f6e');
+      wrapText(p.wrongLine, W/2, 148, 820, 26, 20, '#f0b8be', 'center', 400);
+
+      // the skid, still doing the wrong thing
+      const hotNow = p.need === 'cool';
+      g.fillStyle = hotNow ? '#5a2a1c' : '#1d3a52';
+      rr(W/2-180, 214, 360, 240, 12); g.fill();
+      g.strokeStyle = '#ee5f6e'; g.lineWidth=3; rr(W/2-180, 214, 360, 240, 12); g.stroke();
+      g.save(); g.beginPath(); rr(W/2-176, 218, 352, 232, 10); g.clip();
+      g.fillStyle='rgba(0,0,0,.3)'; g.fillRect(W/2-176,218,352,232);
+      for (let v=0;v<2;v++){
+        const vx = W/2 - 76 + v*152;
+        g.fillStyle = hotNow ? '#b0603c' : '#7fa8c8';
+        rr(vx-36, 252, 72, 190, 9); g.fill();
+        g.fillStyle='rgba(0,0,0,.2)'; rr(vx+12, 252, 24, 190, 8); g.fill();
+      }
+      if (hotNow && Math.random()<.65) emitSmoke(W/2+rnd(-130,130), 232, 1, 'rgba(90,50,40,.5)');
+      if (!hotNow && Math.random()<.5) emitFrost(W/2+rnd(-150,150), rnd(252,442), 1);
+      g.restore();
+      if (st.device === 'heat') unitHeater(W/2+250, 452, 1.15, {run:true});
+      else                      unitCooler(W/2+250, 452, 1.15, {run:true});
+      drawParts();
+
+      if (button('TAKE IT OFF AND TRY AGAIN', W/2-352, H-82, 330, 44,
+                 {col:'#35c8f0', size:17})){
+        st.device = null; st.ok = false; st.leftBad = false;
+        this.bad = null; this.mode='plant'; SFX.click();
+      }
+      if (button(leaveLabel('hea'), W/2+22, H-82, 330, 44, {col:'#8a7a5a', size:17})){
+        st.leftBad = true;
+        noteFault('hea');
+        toast(leaveBlurb('hea'));
+        this.bad = null; this.mode='free';
+        this.say(isWeak('hea')
+          ? 'It has settled down. Probably. I will not look at it again.'
+          : 'Noted on the board. Somebody will get to it before the shift ends.');
+      }
+      txt(isWeak('hea')
+          ? 'nobody has said anything, so it is presumably fine'
+          : 'a skid left wrong is a skid that stays wrong',
+          W/2, H-20, 15, 'rgba(232,216,204,.55)');
+    }
+
     if (this.noteT > 0){
       this.noteT -= dt;
       const cw=720, cx=W/2-cw/2, cy=H-128;
@@ -366,9 +465,8 @@ const S_hea = {
         toast('Hot line first, next time.');
       }
     }
-    if (st.ok){ this.pts += 1; SFX.good(); }
-    else { SFX.bad(); G.blunders++; this.say(p.wrongLine); }
-    this.mode='free';
+    if (st.ok){ this.pts += 1; SFX.good(); this.mode='free'; }
+    else { SFX.bad(); this.noteT = 0; this.bad = this.pi; this.mode='fail'; }
   },
 
   /* ---------------- heat path quiz, on the hall's wall monitor ---------------- */

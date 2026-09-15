@@ -250,7 +250,7 @@ const S_flu = {
     this.rigs = FLU_RIGS.map(()=>({
       placed:[false,false,false,false,false], bolted:[false,false,false,false,false,false],
       mover:null, relief:false, flow:0, spin:0, power:0, phase:'build',
-      venting:false, tried:false, ghost:false, re:null, done:false
+      venting:false, tried:false, ghost:false, re:null, done:false, leftBad:false
     }));
     this.pts=0; this.safePts=0; this.scored=false;
     this.quiz=null; this.quizScore=0;
@@ -261,6 +261,7 @@ const S_flu = {
   exit(){
     if (!this.scored){ this.scored=true;
       award('flu', this.pts, 8); award('saf', this.safePts, 2);
+      armExplosion('flu');
       if (isHard()) award('flu', this.quizScore || 0, 3);
       if (this.rigs.every(r=>r.done)) G.done.flu = true; }
   },
@@ -327,8 +328,12 @@ const S_flu = {
         pipeSeg(r.x-60, 470, r.x+40, 470, 13, mc);
         pipeSeg(r.x+40, 470, r.x+40, 370, 13, mc);
         pipeSeg(r.x+40, 370, r.x+170, 370, 13, mc);
-        flowDots([[r.x-170,470],[r.x+40,470],[r.x+40,370],[r.x+170,370]], 2.4, 1,
-                 r.fluid==='liquid'?'rgba(120,205,245,.9)':'rgba(215,235,245,.7)', 3);
+        if (!st.leftBad){
+          flowDots([[r.x-170,470],[r.x+40,470],[r.x+40,370],[r.x+170,370]], 2.4, 1,
+                   r.fluid==='liquid'?'rgba(120,205,245,.9)':'rgba(215,235,245,.7)', 3);
+        } else if (Math.random()<.3){
+          emitSpark(r.x-60, 470, 1, '#ff9a6a');
+        }
       } else {
         g.save(); g.strokeStyle='rgba(35,166,224,.3)'; g.lineWidth=13;
         g.setLineDash([9,8]);
@@ -340,8 +345,12 @@ const S_flu = {
       }
       g.restore();
       panel(r.x-130, 244, 260, 40, 'rgba(5,22,33,.94)',
-            st.done ? 'rgba(63,208,127,.6)' : 'rgba(240,160,42,.55)', 8);
-      txt(r.title, r.x, 264, 15, st.done ? '#8fe8b8' : '#f5cf8a');
+            st.leftBad ? 'rgba(238,95,110,.6)'
+            : st.done ? 'rgba(63,208,127,.6)' : 'rgba(240,160,42,.55)', 8);
+      txt(r.title, r.x, 264, 15,
+          st.leftBad ? '#f0b0bc' : st.done ? '#8fe8b8' : '#f5cf8a');
+      if (st.leftBad) txt('UNRESOLVED', r.x, 300, 14,
+                          `rgba(238,95,110,${.5+Math.sin(T/14)*.25})`);
       if (this.mode==='free' && !st.done && Math.abs(this.px - r.x) < 150) nearR = i;
     });
 
@@ -682,8 +691,17 @@ const S_flu = {
           !st.moverOK ? '#ee5f6e' : (st.power>=0.55 && st.power<=0.82) ? '#8fe8b8' : '#f5cf8a',
           'center', 400);
 
-      if (!st.moverOK && button('SWAP THE MACHINE', 40, H-72, 250, 44, {col:'#ee5f6e', size:16})){
-        st.phase='choose'; st.power=0; st.flow=0;
+      if (!st.moverOK){
+        if (button('SWAP THE MACHINE', 40, H-72, 250, 44, {col:'#ee5f6e', size:16})){
+          st.phase='choose'; st.power=0; st.flow=0;
+        }
+        /* or shrug and hand the line over as it is */
+        if (button(leaveLabel('flu'), 304, H-72, 250, 44, {col:'#8a7a5a', size:15})){
+          noteFault('flu');
+          st.leftBad = true;
+          toast(leaveBlurb('flu'));
+          this.finishRig();
+        }
       }
       if (button('STOP', W-190, H-72, 150, 44, {size:16})){ st.phase='build'; st.power=0; st.flow=0; }
     }
@@ -747,13 +765,23 @@ const S_flu = {
   finishRig(){
     const st = this.rigs[this.ri], rig = FLU_RIGS[this.ri];
     st.done = true;
-    if (st.moverOK) this.pts += 2;
-    this.pts += 1;                       // held the line in the band
-    if (st.relief) this.safePts += 1;
-    st.phase='build';
-    this.mode='free';
-    SFX.great();
-    toast(rig.title.split('·')[0].trim() + ' is running.');
-    if (this.rigs.every(r=>r.done)) toast('Both lines running. Fadi can breathe again.');
+    const name = rig.title.split('·')[0].trim();
+    if (st.leftBad){
+      /* nothing moved, so nothing is earned */
+      if (st.relief) this.safePts += 1;
+      st.phase='build'; this.mode='free'; SFX.bad();
+      toast(name + ' is still dead. You walked away from it.');
+    } else {
+      if (st.moverOK) this.pts += 2;
+      this.pts += 1;                     // held the line in the band
+      if (st.relief) this.safePts += 1;
+      st.phase='build'; this.mode='free'; SFX.great();
+      toast(name + ' is running.');
+    }
+    if (this.rigs.every(r=>r.done)){
+      toast(this.rigs.some(r=>r.leftBad)
+        ? 'Fadi is looking at the line you gave up on.'
+        : 'Both lines running. Fadi can breathe again.');
+    }
   }
 };

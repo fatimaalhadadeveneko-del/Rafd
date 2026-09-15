@@ -53,8 +53,17 @@ Click once when the title card appears so the browser lets the sound play.
    * **Separation Techniques Lab** — read five animated feed samples and install the right unit. Wrong units fail in their own way: salt cakes a column solid and splits a seam, a dryer sprays brine over everything, sugar in a reboiler caramelises then carbonises.
    * **Reactor Design Lab** — three clients with a problem each. Ask them questions, then order the reactor, the temperature scheme and the rate on your phone. Wrong type gives purple goo, wrong jacket freezes or ignites it, too high a rate splits it open, too low gives a puff of air.
    * **Piping Circuit Bay** — take the Reynolds sheet, build a line, bolt every flange, fit a relief valve, then pick a pump, a compressor, or a distillation column that will help nobody. Ramp the power into the band and tick the flow regime.
-   * **Thermal Exchange Hall** — one skid running away hot, one merely cold. Which you treat first is the safety call. Then read the wall-mounted thermal path analyser and tag how the heat crosses a furnace gap, a steel wall, a still film and a flowing fluid, before trimming to steady state.
-   * **Break Room** — a colleague, a couch, and a thermodynamics nightmare you will not enjoy.
+   * **Thermal Exchange Hall** — one skid running away hot, one merely cold. Which you treat first is the safety call. Then walk up to the thermal path analyser standing in the middle of the hall and tag how the heat crosses a furnace gap, a steel wall, a still film and a flowing fluid, before trimming to steady state.
+   * **Break Room** — locked until the four units are finished. A colleague, a couch, and a thermodynamics nightmare you will not enjoy.
+
+   Nothing forces you to put a mistake right. Every failure offers a second
+   button beside the retry: **FIX IT LATER** for an engineer who knows better,
+   or **LEAVE IT AS IT IS** in a subject they are weak in, where they genuinely
+   believe it is fine. It costs the marks and leaves the equipment running
+   wrong with an UNRESOLVED tag on it. Leave two things wrong in the same unit
+   and it lets go behind you as you cross the yard: your engineer asks *what
+   was that?*, or, if it was their weak subject, decides they are imagining
+   things. It stays on the incident board until the verdict.
 5. Report back to Mr. Tarek and find out whether you keep the job.
 
 ## Scoring
@@ -114,6 +123,15 @@ ChemEngQuest.html#brk     break room
 ChemEngQuest.html#hub     the refinery yard
 ChemEngQuest.html#end     the verdict
 ChemEngQuest.html#hub,mute   any of the above with the music off
+```
+
+Two more, for setting a scene up quickly:
+
+```
+ChemEngQuest.html#hea,jojo        play that station as a chosen engineer
+                                  (#layla #omar #yusra #jojo)
+ChemEngQuest.html#hub,alldone     the four units already finished, so the
+                                  break room and the verdict are reachable
 ```
 
 ## Editing the game
